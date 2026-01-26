@@ -16,6 +16,49 @@ El objetivo es reducir el peso de la web y pasarlo al **Discord** como foco prin
 
 ---
 
+## 🧭 Cómo se usa DofusGrimorio
+
+DofusGrimorio es un proyecto **público y open-source**, pensado para que **cualquier servidor Discord**
+pueda utilizarlo **ejecutando su propia instancia**.
+
+El flujo de uso es el siguiente:
+
+1️⃣ **Clonas el proyecto**  
+Cada servidor descarga el código y ejecuta su propia instancia del bot.
+
+2️⃣ **Creas tu propia aplicación de Discord**  
+Cada instancia utiliza **su propio token** y puede tener el nombre y apariencia que desees.
+
+3️⃣ **Configuras el entorno**  
+Defines las variables necesarias (`.env`) y la conexión a la base de datos del juego.
+
+4️⃣ **Arrancas el bot**  
+El bot se ejecuta de forma local o en tu servidor (VPS, máquina propia, etc.).
+
+5️⃣ **Instalas la instancia en Discord**  
+Dentro del servidor Discord ejecutas: `/instalar`
+
+Este paso inicializa el Grimorio:
+- bloquea la instancia a ese servidor Discord
+- detecta las capacidades del servidor Dofus
+- prepara la base de datos interna del bot
+- activa solo las funcionalidades compatibles
+
+6️⃣ **Empiezas a usar el Grimorio**  
+A partir de ese momento, el servidor puede:
+- crear y vincular cuentas
+- consultar personajes y perfiles
+- acceder a rankings
+- gestionar gremios, mercado, votos y extras (según soporte)
+
+> 🔍 **Importante**  
+> DofusGrimorio no es un bot centralizado ni un servicio compartido.
+>  
+> El proyecto es público, pero **cada servidor Discord ejecuta su propia instancia del bot**,
+> con su propio token y su propia configuración.
+
+---
+
 ## 🧠 Cómo funciona 🧠
 
 Cada instancia del bot:
@@ -106,7 +149,7 @@ Módulos que conectan el bot con la base de datos real del juego.
 4. Arranca el bot
 5. Ejecuta `/setup install`
 
-👉 Guía completa en `/docs`
+👉 Cada servidor repite este proceso de forma independiente.
 
 ---
 
