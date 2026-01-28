@@ -1,42 +1,9 @@
-import { createPool } from 'mysql2/promise';
+const { createPool } = require('mysql2/promise');
 requiere('dotenv').config();
 
-//const { initDbPools, testPools } = requiere('./db');
-import { runMigrations } from './migrate.js';
-import { logInfo, logError } from '../logger/logger.js';
-import { dbHintFromError } from './errorHints.js';
-const cfg = requiere('./config');
-
-async function bootStrap() {
-    logInfo('Iniciando Dofus Grimorio...');
-
-    const pools = initPools(process.env);
-
-    try {
-        // Test de conexion
-        await (testPools(pools));
-        console.log('BD -> conectada');
-
-        //Crear tablas necesarias para funcionamiento del bot 
-        await runMigrations(pools.grim);
-        console.log('tablas dg_ creadas.');
-
-    } catch (err) {
-        //Log detallado a logs/error-DD-MM-YYYY.txt
-        logError(err, 'Fallo al conectar/inicializar la BD');
-
-        //Mensaje a la consola con pista para resvolver el error (si tiene conocimientos)
-        const hint = dbHintFromError(err);
-        console.error('\nPista para resolverlo:\n' + hint);
-
-        console.error('\nSe ha guardado un log detallado en: logs/');
-        process.exit(1);
-    }
-
-
-    //Ejecutamos el bot 
-    //await startDiscordBot(pools);
-}
+const { runMigrations } = require('./migrate.js');
+const { dbHintFromError } = require('./errorHints.js');
+const cfg = require('./config');
 
 bootStrap();
 
@@ -54,6 +21,8 @@ function makePool({ host, port, user, password, database }) {
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
     });
+
+    return pool;
 }
 
 let pools = null;
@@ -102,4 +71,30 @@ async function testPools(p) {
     await p.grim.query('SELECT 1');
 }
 
-module.exports = { initPools, testPools }
+function initDb(env) {
+    const pools = initPools(env);
+
+    return {
+        pools,
+        config: pools.config,
+        async migrate() {
+            await runMigrations(pools.grim);
+        },
+        async health() {
+            const lines = [];
+
+            try {
+                await testPools(pools);
+                lines.push('BD -> conectada');
+                return { ok: true, lines };
+            } catch (err) {
+                const hint = dbHintFromError(err);
+                lines.push('Error de conexión a la base de datos.');
+                if (hint) lines.push(hint);
+                return { ok: false, lines, err };
+            }
+        },
+    };
+}
+
+module.exports = { initPools, testPools, initDb };

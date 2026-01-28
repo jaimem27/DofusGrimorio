@@ -1,6 +1,6 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
-import { buildInstallView } from './instalar/ui.js';
-import { loadInstallState } from './instalar/handler.js';
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { buildInstallView } = require('./instalar/ui.js');
+const { loadInstallState } = require('./instalar/handler.js');
 
 function isAdmin(interaction) {
     const perms = interaction.memberPermissions;

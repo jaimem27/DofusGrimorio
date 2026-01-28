@@ -1,4 +1,4 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 const IDS = {
     BTN_AUTH: 'dg:install:auth',
@@ -63,7 +63,7 @@ function buildInstallButtons(state) {
 function buildInstallView(state) {
     return {
         embeds: [buildInstallEmbed(state)],
-        components: buildInstallButtons(state),
+        components: [buildInstallButtons(state)],
     };
 }
 

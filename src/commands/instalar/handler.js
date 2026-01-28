@@ -1,7 +1,7 @@
-import { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } from 'discord.js';
 
+const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { buildInstallView, IDS } = require('./ui.js');
-const { hintFromDbError } = require('../../db/errorHints.js');
+const { dbHintFromError  } = require('../../db/errorHints.js');
 const mysql2 = require('mysql2/promise');
 
 const MODALS = {
@@ -41,7 +41,7 @@ function makeDbModal(kind, defaults = {}) {
     const isAuth = kind === 'auth';
     const modalId = isAuth ? MODALS.AUTH : MODALS.WORLD;
 
-    const prefix = isAuth ? 'dg:auth' : 'dg:world';
+    const prefix = isAuth ? 'dg:auth:' : 'dg:world:';
     const title = isAuth ? 'Configurar AUTH' : 'Configurar WORLD';
 
     const host = new TextInputBuilder()
@@ -56,21 +56,21 @@ function makeDbModal(kind, defaults = {}) {
         .setLabel('Puerto')
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
-        .setValue(defaults.host || '3306');
+        .setValue(defaults.port || '3306');
 
     const user = new TextInputBuilder()
         .setCustomId(prefix + 'user')
         .setLabel('Usuario')
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
-        .setValue(defaults.host || 'root');
+        .setValue(defaults.user || 'root');
 
     const pass = new TextInputBuilder()
         .setCustomId(prefix + 'password')
         .setLabel('Contraseña (puede estar vacia)')
         .setStyle(TextInputStyle.Short)
-        .setRequired(flase)
-        .setValue(defaults.host || '');
+        .setRequired(false)
+        .setValue(defaults.password || '');
 
     const dbname = new TextInputBuilder()
         .setCustomId(prefix + 'db')
@@ -189,7 +189,7 @@ async function handleInstallButton(interaction, ctx) {
 
         if (!authRes.ok) {
             return interaction.reply({
-                content: `AUTH: fallo de conexión.\n${hintFromDbError(authRes.err, 'AUTH')}`,
+                content: `AUTH: fallo de conexión.\n${dbHintFromError(authRes.err, 'AUTH')}`,
                 ephemeral: true,
             });
         }
@@ -204,7 +204,7 @@ async function handleInstallButton(interaction, ctx) {
 
         if (!worldRes.ok) {
             return interaction.reply({
-                content: `WORLD: fallo de conexión.\n${hintFromDbError(worldRes.err, 'WORLD')}`,
+                content: `WORLD: fallo de conexión.\n${dbHintFromError(worldRes.err, 'WORLD')}`,
                 ephemeral: true,
             });
         }

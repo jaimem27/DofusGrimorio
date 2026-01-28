@@ -63,4 +63,4 @@ async function delPrefix(pool, prefix) {
     );
 }
 
-export default { getConfig, getConfigMany, setConfig, setConfigMany, delConfig, delPrefix };
+module.exports = { getConfig, getConfigMany, setConfig, setConfigMany, delConfig, delPrefix };

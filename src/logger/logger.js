@@ -1,13 +1,13 @@
-const fs = requiere('fs');
-const path = requiere('path');
+const fs = require('fs');
+const path = require('path');
 
-const LOG_DIR = path.join(procces.cwd(), 'logs');
+const LOG_DIR = path.join(process.cwd(), 'logs');
 
 function ensureLogDir() {
     if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 }
 
-function todayFile() {
+function todayFile(prefix = 'log') {
     const d = new Date();
     const yyyy = String(d.getFullYear());
     const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -16,9 +16,9 @@ function todayFile() {
     return path.join(LOG_DIR, `${prefix}-${dd}-${mm}-${yyyy}.txt`);
 }
 
-function appendLine(filePathm, line) {
+function appendLine(filePath, line) {
     ensureLogDir();
-    fs.appendFileSync(filePathm, line + '\n', { encoding: 'utf8' });
+    fs.appendFileSync(filePath, line + '\n', { encoding: 'utf8' });
 }
 
 function nowStamp() {

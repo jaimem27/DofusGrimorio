@@ -1,5 +1,4 @@
-import { Client, GatewayIntentBits, MessageFlags } from 'discord.js';
-
+const { Client, GatewayIntentBits } = require('discord.js');
 const { initDb } = require('./db/index.js');
 const { handleInstallButton, handleInstallModal } = require('./commands/instalar/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
