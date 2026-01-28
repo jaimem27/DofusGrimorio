@@ -33,7 +33,7 @@ async function loadInstallState(db) {
         authConfigured,
         worldConfigured,
         installed,
-        tablesReady: true,
+        tablesReady: db.isPersistent ? db.isPersistent() : true,
     };
 }
 
@@ -270,6 +270,36 @@ async function handleInstallModal(interaction, ctx) {
 
     if (!host || !port || !user || !dbname) {
         return interaction.reply({ content: 'Rellena host/puerto/usuario/nombre de BD.', Flags: MessageFlags.ephemeral });
+    }
+
+    if (isAuth) {
+        try {
+            const conn = await mysql2.createConnection({
+                host,
+                port: Number(port),
+                user,
+                password,
+            });
+
+            await conn.query(
+                `CREATE DATABASE IF NOT EXISTS \`${dbname}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci`
+            );
+
+            await conn.end();
+
+            await ctx.db.useMysqlConfig({
+                host,
+                port,
+                user,
+                password,
+                database: dbname,
+            });
+        } catch (err) {
+            return interaction.reply({
+                content: `No se pudo preparar la base de datos AUTH.\n${dbHintFromError(err, 'AUTH')}`,
+                ephemeral: true,
+            });
+        }
     }
 
     await db.config.setMany({
