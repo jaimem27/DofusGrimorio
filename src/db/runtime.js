@@ -54,7 +54,7 @@ function createRuntimeDb() {
         isPersistent() {
             return Boolean(pool);
         },
-        async useMysqlConfig({ host, port, user, password, database }) {
+        async useMysqlConfig({ host, port, user, password, database, migrate = true }) {
             pool = createPool({
                 host,
                 port: Number(port || 3306),
@@ -67,7 +67,9 @@ function createRuntimeDb() {
                 enableKeepAlive: true,
             });
 
-            await runMigrations(pool);
+            if (migrate) {
+                await runMigrations(pool);
+            }
 
             configImpl = {
                 get: (key) => cfg.getConfig(pool, key),
