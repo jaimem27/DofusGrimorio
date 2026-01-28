@@ -1,5 +1,5 @@
 
-const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { buildInstallView, IDS } = require('./ui.js');
 const { dbHintFromError } = require('../../db/errorHints.js');
 const { runMigrations } = require('../../db/migrate.js');
@@ -107,13 +107,30 @@ async function getDbDefaults(db, kind) {
     };
 }
 
-async function refreshPanel(interaction, db) {
-    const state = await loadInstallState(db);
+async function refreshPanel(interaction, ctx) {
+    const state = await loadInstallState(ctx.db);
     const view = buildInstallView(state);
 
-    if (interaction.isButton()) return interaction.update(view);
-    return interaction.editReply(view);
+    // Botones: actualizan el mismo mensaje
+    if (interaction.isButton()) {
+        return interaction.update(view);
+    }
+
+    // Modals: NO tienen message -> editamos el panel guardado
+    const channelId = ctx.installPanelChannelId || interaction.channelId;
+    const panelId = ctx.installPanelId;
+
+    if (!channelId || !panelId) return;
+
+    const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased?.()) return;
+
+    const panelMsg = await channel.messages.fetch(panelId).catch(() => null);
+    if (!panelMsg) return;
+
+    await panelMsg.edit(view);
 }
+
 
 async function testConnectionOnce({ host, port, user, password, database }) {
     const pool = mysql2.createPool({
@@ -163,8 +180,8 @@ async function handleInstallButton(interaction, ctx) {
         await db.config.delPrefix('world.');
         await db.config.set('install.done', '0');
 
-        await interaction.reply({ content: 'Configuración reiniciada.', Flags: MessageFlags.ephemeral });
-        return refreshPanel(interaction, db);
+        await interaction.deferUpdate();
+        return refreshPanel(interaction, ctx);
     }
 
     if (id === IDS.BTN_FINISH) {
@@ -176,7 +193,7 @@ async function handleInstallButton(interaction, ctx) {
         if (missingAuth.length || missingWorld.length) {
             return interaction.reply({
                 content: 'Falta configurar AUTH o WORLD antes de finalizar.',
-                ephemeral: true,
+                Flags: MessageFlags.ephemeral,
             });
         }
 
@@ -191,7 +208,7 @@ async function handleInstallButton(interaction, ctx) {
         if (!authRes.ok) {
             return interaction.reply({
                 content: `AUTH: fallo de conexión.\n${dbHintFromError(authRes.err, 'AUTH')}`,
-                ephemeral: true,
+                Flags: MessageFlags.ephemeral,
             });
         }
 
@@ -206,7 +223,7 @@ async function handleInstallButton(interaction, ctx) {
         if (!worldRes.ok) {
             return interaction.reply({
                 content: `WORLD: fallo de conexión.\n${dbHintFromError(worldRes.err, 'WORLD')}`,
-                ephemeral: true,
+                Flags: MessageFlags.ephemeral,
             });
         }
 
@@ -245,10 +262,10 @@ async function handleInstallButton(interaction, ctx) {
 
         await interaction.reply({
             content: 'Instalación completada. Ya puedes usar DofusGrimorio.',
-            ephemeral: true,
+            Flags: MessageFlags.ephemeral,
         });
 
-        return refreshPanel(interaction, db);
+        return refreshPanel(interaction, ctx);
     }
 }
 
@@ -317,7 +334,7 @@ async function handleInstallModal(interaction, ctx) {
         } catch (err) {
             return interaction.reply({
                 content: `No se pudo preparar la base de datos AUTH.\n${dbHintFromError(err, 'AUTH')}`,
-                ephemeral: true,
+                Flags: MessageFlags.ephemeral,
             });
         }
     }
@@ -332,11 +349,11 @@ async function handleInstallModal(interaction, ctx) {
 
     await interaction.reply({
         content: `${isAuth ? 'AUTH' : 'WORLD'} guardado.`,
-        ephemeral: true,
+        Flags: MessageFlags.ephemeral,
     });
 
     try {
-        await refreshPanel(interaction, db);
+        await refreshPanel(interaction, ctx);
     } catch (_) {
 
     }

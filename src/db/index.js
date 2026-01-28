@@ -3,6 +3,7 @@ const { runMigrations } = require('./migrate.js');
 const { dbHintFromError } = require('./errorHints.js');
 const cfg = require('./config');
 
+
 //bootStrap();
 
 function makePool({ host, port, user, password, database }) {

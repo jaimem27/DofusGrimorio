@@ -11,21 +11,29 @@ function isAdmin(interaction) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('instalar')
-        .setDescription('Configura Dofus Grimorio. (Requiere permisos de administrador)'),
+        .setDescription('Configura Dofus Grimorio.)'),
 
     async execute(interaction, ctx) {
         if (!isAdmin(interaction)) {
-            await interaction.reply({
+            return interaction.reply({
                 content: 'No tienes permisos de administrador para usar este comando.',
-                flags: MessageFlags.Ephemeral,
+                Flags: MessageFlags.ephemeral,
             });
         }
+
+        if (!ctx.db) {
+            const state = {
+                authConfigured: false,
+                worldConfigured: false,
+                installed: false,
+                tablesReady: false,
+            };
+            const view = buildInstallView(state);
+            return interaction.reply({ ...view, Flags: MessageFlags.ephemeral});
+        }
+
         const state = await loadInstallState(ctx.db);
         const view = buildInstallView(state);
-
-        return interaction.reply({
-            ...view,
-            flags: MessageFlags.Ephemeral,
-        });
+        return interaction.reply({ ...view, Flags: MessageFlags.ephemeral });
     },
 };
