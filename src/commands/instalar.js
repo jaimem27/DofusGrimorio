@@ -17,7 +17,7 @@ module.exports = {
         if (!isAdmin(interaction)) {
             return interaction.reply({
                 content: 'No tienes permisos de administrador para usar este comando.',
-                Flags: MessageFlags.ephemeral,
+                ephemeral: true,
             });
         }
 
@@ -29,11 +29,11 @@ module.exports = {
                 tablesReady: false,
             };
             const view = buildInstallView(state);
-            return interaction.reply({ ...view, Flags: MessageFlags.ephemeral});
+            return interaction.reply({ ...view, ephemeral: true });
         }
 
         const state = await loadInstallState(ctx.db);
         const view = buildInstallView(state);
-        return interaction.reply({ ...view, Flags: MessageFlags.ephemeral });
+        return interaction.reply({ ...view, ephemeral: true });
     },
 };

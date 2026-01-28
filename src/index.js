@@ -2,9 +2,9 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 
-const { Client, GatewayIntentBits, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const { createRuntimeDb } = require('./db/runtime.js');
-const { handleInstallButton, handleInstallModal } = require('./commands/instalar/handler.js');
+const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
 
 
@@ -32,14 +32,9 @@ async function bootstrap() {
             const { buildInstallView } = require('./commands/instalar/ui.js'); // ajusta si tu export es distinto
 
             if (interaction.isChatInputCommand() && interaction.commandName === 'instalar') {
-                await interaction.deferReply({ Flags: MessageFlags.ephemeral });
+                await interaction.deferReply();
 
-                const state = {   
-                    authConfigured: false,
-                    worldConfigured: false,
-                    tablesReady: false,
-                    installed: false,
-                };
+                const state = await loadInstallState(ctx.db);
 
                 const view = buildInstallView(state);
                 const msg = await interaction.editReply(view);
@@ -63,7 +58,7 @@ async function bootstrap() {
 
             if (interaction.isRepliable()) {
                 try {
-                    await interaction.reply({ content: 'Error interno.', Flags: MessageFlags.ephemeral });
+                    await interaction.reply({ content: 'Error interno.', ephemeral: true });
                 } catch (_) { }
             }
         }

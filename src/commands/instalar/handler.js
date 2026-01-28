@@ -1,5 +1,5 @@
 
-const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
+const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { buildInstallView, IDS } = require('./ui.js');
 const { dbHintFromError } = require('../../db/errorHints.js');
 const { runMigrations } = require('../../db/migrate.js');
@@ -18,6 +18,8 @@ function isAdmin(interaction) {
 
 const AUTH_KEYS = ['auth.host', 'auth.port', 'auth.user', 'auth.password', 'auth.db'];
 const WORLD_KEYS = ['world.host', 'world.port', 'world.user', 'world.password', 'world.db'];
+const AUTH_REQUIRED_KEYS = ['auth.host', 'auth.port', 'auth.user', 'auth.db'];
+const WORLD_REQUIRED_KEYS = ['world.host', 'world.port', 'world.user', 'world.db'];
 
 async function loadInstallState(db) {
     const cfg = await db.config.getMany([
@@ -26,8 +28,8 @@ async function loadInstallState(db) {
         'install.done',
     ]);
 
-    const authConfigured = AUTH_KEYS.every(k => (cfg[k] ?? '').toString().length > 0);
-    const worldConfigured = WORLD_KEYS.every(k => (cfg[k] ?? '').toString().length > 0);
+    const authConfigured = AUTH_REQUIRED_KEYS.every(k => (cfg[k] ?? '').toString().length > 0);
+    const worldConfigured = WORLD_REQUIRED_KEYS.every(k => (cfg[k] ?? '').toString().length > 0);
     const installed = (cfg['install.done'] ?? '0') === '1';
 
     return {
@@ -157,7 +159,7 @@ async function testConnectionOnce({ host, port, user, password, database }) {
 
 async function handleInstallButton(interaction, ctx) {
     if (!isAdmin(interaction)) {
-        return interaction.reply({ content: 'No tienes permisos.', Flags: MessageFlags.ephemeral });
+        return interaction.reply({ content: 'No tienes permisos.', ephemeral: true });
     }
 
     const { db } = ctx;
@@ -187,13 +189,13 @@ async function handleInstallButton(interaction, ctx) {
     if (id === IDS.BTN_FINISH) {
         const cfg = await db.config.getMany([...AUTH_KEYS, ...WORLD_KEYS]);
 
-        const missingAuth = AUTH_KEYS.filter(k => !(cfg[k] && String(cfg[k]).length));
-        const missingWorld = WORLD_KEYS.filter(k => !(cfg[k] && String(cfg[k]).length));
+        const missingAuth = AUTH_REQUIRED_KEYS.filter(k => !(cfg[k] && String(cfg[k]).length));
+        const missingWorld = WORLD_REQUIRED_KEYS.filter(k => !(cfg[k] && String(cfg[k]).length));
 
         if (missingAuth.length || missingWorld.length) {
             return interaction.reply({
                 content: 'Falta configurar AUTH o WORLD antes de finalizar.',
-                Flags: MessageFlags.ephemeral,
+                ephemeral: true,
             });
         }
 
@@ -208,7 +210,7 @@ async function handleInstallButton(interaction, ctx) {
         if (!authRes.ok) {
             return interaction.reply({
                 content: `AUTH: fallo de conexión.\n${dbHintFromError(authRes.err, 'AUTH')}`,
-                Flags: MessageFlags.ephemeral,
+                ephemeral: true,
             });
         }
 
@@ -223,7 +225,7 @@ async function handleInstallButton(interaction, ctx) {
         if (!worldRes.ok) {
             return interaction.reply({
                 content: `WORLD: fallo de conexión.\n${dbHintFromError(worldRes.err, 'WORLD')}`,
-                Flags: MessageFlags.ephemeral,
+                ephemeral: true,
             });
         }
 
@@ -262,7 +264,7 @@ async function handleInstallButton(interaction, ctx) {
 
         await interaction.reply({
             content: 'Instalación completada. Ya puedes usar DofusGrimorio.',
-            Flags: MessageFlags.ephemeral,
+            ephemeral: true,
         });
 
         return refreshPanel(interaction, ctx);
@@ -271,7 +273,7 @@ async function handleInstallButton(interaction, ctx) {
 
 async function handleInstallModal(interaction, ctx) {
     if (!isAdmin(interaction)) {
-        return interaction.reply({ content: 'No tienes permisos.', Flags: MessageFlags.ephemeral });
+        return interaction.reply({ content: 'No tienes permisos.', ephemeral: true });
     }
 
     const { db } = ctx;
@@ -287,7 +289,7 @@ async function handleInstallModal(interaction, ctx) {
     const dbname = interaction.fields.getTextInputValue(prefix + 'db').trim();
 
     if (!host || !port || !user || !dbname) {
-        return interaction.reply({ content: 'Rellena host/puerto/usuario/nombre de BD.', Flags: MessageFlags.ephemeral });
+        return interaction.reply({ content: 'Rellena host/puerto/usuario/nombre de BD.', ephemeral: true });
     }
 
     if (isAuth) {
@@ -334,7 +336,7 @@ async function handleInstallModal(interaction, ctx) {
         } catch (err) {
             return interaction.reply({
                 content: `No se pudo preparar la base de datos AUTH.\n${dbHintFromError(err, 'AUTH')}`,
-                Flags: MessageFlags.ephemeral,
+                ephemeral: true,
             });
         }
     }
@@ -349,7 +351,7 @@ async function handleInstallModal(interaction, ctx) {
 
     await interaction.reply({
         content: `${isAuth ? 'AUTH' : 'WORLD'} guardado.`,
-        Flags: MessageFlags.ephemeral,
+        ephemeral: true,
     });
 
     try {
