@@ -32,7 +32,7 @@ async function bootstrap() {
             const { buildInstallView } = require('./commands/instalar/ui.js'); // ajusta si tu export es distinto
 
             if (interaction.isChatInputCommand() && interaction.commandName === 'instalar') {
-                await interaction.deferReply();
+                await interaction.deferReply({ ephemeral: true });
 
                 const state = await loadInstallState(ctx.db);
 

@@ -115,6 +115,12 @@ async function refreshPanel(interaction, ctx) {
 
     // Botones: actualizan el mismo mensaje
     if (interaction.isButton()) {
+        if (interaction.replied || interaction.deferred) {
+            if (interaction.message?.editable) {
+                return interaction.message.edit(view);
+            }
+            return interaction.editReply(view);
+        }
         return interaction.update(view);
     }
 
