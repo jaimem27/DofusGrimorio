@@ -2,6 +2,7 @@
 const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { buildInstallView, IDS } = require('./ui.js');
 const { dbHintFromError } = require('../../db/errorHints.js');
+const { runMigrations } = require('../../db/migrate.js');
 const mysql2 = require('mysql2/promise');
 
 const MODALS = {
@@ -287,12 +288,31 @@ async function handleInstallModal(interaction, ctx) {
 
             await conn.end();
 
+            const pool = mysql2.createPool({
+                host,
+                port: Number(port || 3306),
+                user,
+                password,
+                database: dbname,
+                waitForConnections: true,
+                connectionLimit: 2,
+                queueLimit: 0,
+                enableKeepAlive: true,
+            });
+
+            try {
+                await runMigrations(pool);
+            } finally {
+                await pool.end();
+            }
+
             await ctx.db.useMysqlConfig({
                 host,
                 port,
                 user,
                 password,
                 database: dbname,
+                migrate: false,
             });
         } catch (err) {
             return interaction.reply({
