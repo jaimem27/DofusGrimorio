@@ -1,8 +1,10 @@
+require('dotenv').config();
+
 const { Client, GatewayIntentBits } = require('discord.js');
 const { initDb } = require('./db/index.js');
 const { handleInstallButton, handleInstallModal } = require('./commands/instalar/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
-require('dotenv').config();
+
 
 
 const ctx = {
@@ -14,16 +16,15 @@ const client = new Client({
 });
 
 async function bootstrap() {
-  ctx.db = initDb(process.env);
+  //ctx.db = initDb(process.env);
 
-  await ctx.db.migrate();
+  //await ctx.db.migrate();
 
-  const health = await ctx.db.health();
-  health.lines.forEach((l) => logInfo ? logInfo(l) : console.log(l));
-  if (!health.ok) {
-    throw new Error('No se pudo conectar a una o más bases de datos. Revisa configuración.');
-  }
-
+  //const health = await ctx.db.health();
+  //health.lines.forEach((l) => logInfo ? logInfo(l) : console.log(l));
+  //if (!health.ok) {
+  //  throw new Error('No se pudo conectar a una o más bases de datos. Revisa configuración.');
+  //}
   client.on('interactionCreate', async (interaction) => {
     try {
       if (interaction.isButton() && interaction.customId.startsWith('dg:install:')) {

@@ -1,7 +1,7 @@
 
 const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { buildInstallView, IDS } = require('./ui.js');
-const { dbHintFromError  } = require('../../db/errorHints.js');
+const { dbHintFromError } = require('../../db/errorHints.js');
 const mysql2 = require('mysql2/promise');
 
 const MODALS = {
@@ -207,6 +207,37 @@ async function handleInstallButton(interaction, ctx) {
                 content: `WORLD: fallo de conexión.\n${dbHintFromError(worldRes.err, 'WORLD')}`,
                 ephemeral: true,
             });
+        }
+
+
+        {
+            const conn = await mysql2.createConnection({
+                host: cfg['auth.host'],
+                port: Number(cfg['auth.port']),
+                user: cfg['auth.user'],
+                password: cfg['auth.password'],
+            });
+
+            await conn.query(
+                `CREATE DATABASE IF NOT EXISTS \`${cfg['auth.db']}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci`
+            );
+
+            await conn.end();
+        }
+
+        {
+            const conn = await mysql2.createConnection({
+                host: cfg['world.host'],
+                port: Number(cfg['world.port']),
+                user: cfg['world.user'],
+                password: cfg['world.password'],
+            });
+
+            await conn.query(
+                `CREATE DATABASE IF NOT EXISTS \`${cfg['world.db']}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci`
+            );
+
+            await conn.end();
         }
 
         await db.config.set('install.done', '1');
