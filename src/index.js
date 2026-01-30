@@ -17,19 +17,21 @@ const client = new Client({
     intents: [GatewayIntentBits.Guilds],
 });
 
+function resolveBrandingPath(filename) {
+    const jpgPath = path.resolve(__dirname, 'assets', 'bot', `${filename}.jpg`);
+    if (fs.existsSync(jpgPath)) return jpgPath;
+
+    const pngPath = path.resolve(__dirname, 'assets', 'bot', `${filename}.png`);
+    if (fs.existsSync(pngPath)) return pngPath;
+
+    return null;
+}
+
 async function bootstrap() {
-    //ctx.db = initDb(process.env);
 
-    //await ctx.db.migrate();
-
-    //const health = await ctx.db.health();
-    //health.lines.forEach((l) => logInfo ? logInfo(l) : console.log(l));
-    //if (!health.ok) {
-    //  throw new Error('No se pudo conectar a una o más bases de datos. Revisa configuración.');
-    //}
     client.on('interactionCreate', async (interaction) => {
         try {
-            const { buildInstallView } = require('./commands/instalar/ui.js'); // ajusta si tu export es distinto
+            const { buildInstallView } = require('./commands/instalar/ui.js');
 
             if (interaction.isChatInputCommand() && interaction.commandName === 'instalar') {
                 await interaction.deferReply();
@@ -62,6 +64,46 @@ async function bootstrap() {
                 } catch (_) { }
             }
         }
+    });
+
+    client.once('ready', async () => {
+        if (process.env.SET_BRANDING !== 'true') return;
+
+        const iconPath = resolveBrandingPath('icon');
+        const bannerPath = resolveBrandingPath('banner');
+
+        if (!iconPath) {
+            (logError ? logError('No se encontró icon.jpg/icon.png en src/assets/bot') : console.error('No se encontró icon.jpg/icon.png en src/assets/bot'));
+        } else {
+            try {
+                await client.user.setAvatar(iconPath);
+                (logInfo ? logInfo('Icono del bot actualizado') : console.log('Icono del bot actualizado'));
+            } catch (err) {
+                (logError ? logError(err, 'Error al actualizar icono del bot') : console.error(err));
+            }
+        }
+
+        if (!bannerPath) {
+            (logError ? logError('No se encontró banner.jpg/banner.png en src/assets/bot') : console.error('No se encontró banner.jpg/banner.png en src/assets/bot'));
+            return;
+        }
+
+        try {
+            await client.user.setBanner(bannerPath);
+            (logInfo ? logInfo('Banner del bot actualizado') : console.log('Banner del bot actualizado'));
+        } catch (err) {
+            (logError ? logError(err, 'Error al actualizar banner del bot') : console.error(err));
+        }
+
+        client.user.setPresence({
+            status: 'online',
+            activities: [
+                {
+                    name: 'Jugando con Shine',
+                    type: 0,
+                },
+            ],
+        });
     });
 
     // Login discord
