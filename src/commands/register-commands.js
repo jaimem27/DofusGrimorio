@@ -12,11 +12,13 @@ async function main() {
     throw new Error('Faltan DISCORD_TOKEN / DISCORD_CLIENT_ID / DISCORD_GUILD_ID en .env');
   }
 
-  
+
   const instalar = require('./instalar.js');
+  const cuentas = require('./cuentas.js');
 
   const commands = [
     instalar.data.toJSON(),
+    cuentas.data.toJSON(),
   ];
 
   const rest = new REST({ version: '10' }).setToken(token);

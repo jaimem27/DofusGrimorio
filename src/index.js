@@ -2,9 +2,10 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 const { createRuntimeDb } = require('./db/runtime.js');
 const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
+const { handleAccountsButton, refreshAccountsPanel } = require('./commands/cuentas/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
 
 
@@ -16,6 +17,13 @@ const ctx = {
 const client = new Client({
     intents: [GatewayIntentBits.Guilds],
 });
+
+function isAdmin(interaction) {
+    const perms = interaction.memberPermissions;
+    if (!perms) return false;
+    return perms.has(PermissionFlagsBits.Administrator) || perms.has(PermissionFlagsBits.ManageGuild);
+}
+
 
 function resolveBrandingPath(filename) {
     const jpgPath = path.resolve(__dirname, 'assets', 'bot', `${filename}.jpg`);
@@ -34,6 +42,13 @@ async function bootstrap() {
             const { buildInstallView } = require('./commands/instalar/ui.js');
 
             if (interaction.isChatInputCommand() && interaction.commandName === 'instalar') {
+                if (!isAdmin(interaction)) {
+                    return interaction.reply({
+                        content: 'No tienes permisos de administrador para usar este comando.',
+                        ephemeral: true,
+                    });
+                }
+
                 await interaction.deferReply();
 
                 const state = await loadInstallState(ctx.db);
@@ -46,12 +61,39 @@ async function bootstrap() {
                 return;
             }
 
+            if (interaction.isChatInputCommand() && interaction.commandName === 'cuentas') {
+                if (!isAdmin(interaction)) {
+                    return interaction.reply({
+                        content: 'No tienes permisos de administrador para usar este comando.',
+                        ephemeral: true,
+                    });
+                }
+
+                await interaction.deferReply();
+
+                const { buildAccountsView } = require('./commands/cuentas/ui.js');
+                const view = buildAccountsView();
+                const msg = await interaction.editReply(view);
+
+                ctx.accountsPanelId = msg.id;
+                ctx.accountsPanelChannelId = interaction.channelId;
+                return;
+            }
+
             if (interaction.isButton() && interaction.customId.startsWith('dg:install:')) {
                 return handleInstallButton(interaction, ctx);
             }
 
+            if (interaction.isButton() && interaction.customId.startsWith('acc:')) {
+                return handleAccountsButton(interaction, ctx);
+            }
+
             if (interaction.isModalSubmit() && interaction.customId.startsWith('dg:modal:')) {
                 return handleInstallModal(interaction, ctx);
+            }
+
+            if (interaction.isModalSubmit() && interaction.customId.startsWith('acc:')) {
+                return refreshAccountsPanel(interaction, ctx);
             }
 
         } catch (err) {
