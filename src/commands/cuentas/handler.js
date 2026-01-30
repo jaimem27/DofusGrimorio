@@ -4,12 +4,18 @@ const {
     TextInputBuilder,
     TextInputStyle,
     ActionRowBuilder,
+    StringSelectMenuBuilder,
 } = require('discord.js');
 const { buildAccountsView } = require('./ui.js');
 
 const MODALS = {
     CREATE_STEP1: 'acc.modal:create.1',
     CREATE_STEP2: 'acc.modal:create.2',
+    PASS_UPDATE: 'acc.modal:pass',
+};
+
+const SELECTS = {
+    PASS_ACCOUNT: 'acc:pass:select',
 };
 
 const INPUTS = {
@@ -17,9 +23,11 @@ const INPUTS = {
     LOGIN: 'acc.in:login',
     NICK: 'acc.in:nick',
     PASS: 'acc.in:pass',
+    PASS_NEW: 'acc.in:pass.new',
     EMAIL: 'acc.in:email',
     SECRET_Q: 'acc.in:sq',
     SECRET_A: 'acc.in:sa',
+    SECRET_VERIFY: 'acc.in:sa.verify',
 };
 
 const DRAFT_TTL_SECONDS = 90;
@@ -91,6 +99,53 @@ function buildCreateModalStep2() {
         );
 }
 
+function buildPassSelect(options) {
+    const select = new StringSelectMenuBuilder()
+        .setCustomId(SELECTS.PASS_ACCOUNT)
+        .setPlaceholder('Elige cuenta')
+        .addOptions(options);
+
+    return new ActionRowBuilder().addComponents(select);
+}
+
+function buildPasswordModal(account) {
+    const newPass = new TextInputBuilder()
+        .setCustomId(INPUTS.PASS_NEW)
+        .setLabel('Nueva contraseña')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+    const secretQ = new TextInputBuilder()
+        .setCustomId(INPUTS.SECRET_Q)
+        .setLabel('Pregunta secreta')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setValue(account.SecretQuestion || '');
+
+    const secretA = new TextInputBuilder()
+        .setCustomId(INPUTS.SECRET_A)
+        .setLabel('Respuesta secreta')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setValue(account.SecretAnswer || '');
+
+    const secretVerify = new TextInputBuilder()
+        .setCustomId(INPUTS.SECRET_VERIFY)
+        .setLabel('Confirma la respuesta secreta')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+    return new ModalBuilder()
+        .setCustomId(`${MODALS.PASS_UPDATE}:${account.Id}`)
+        .setTitle('Cambiar contraseña')
+        .addComponents(
+            new ActionRowBuilder().addComponents(newPass),
+            new ActionRowBuilder().addComponents(secretQ),
+            new ActionRowBuilder().addComponents(secretA),
+            new ActionRowBuilder().addComponents(secretVerify)
+        );
+}
+
 function parseQty(raw) {
     const qty = Number.parseInt(String(raw).trim(), 10);
     if (!Number.isFinite(qty)) return null;
@@ -100,6 +155,32 @@ function parseQty(raw) {
 
 function normalizeInput(value) {
     return String(value ?? '').trim();
+}
+
+async function loadLinkedAccounts(pool, discordUserId) {
+    const [rows] = await pool.query(
+        `SELECT a.Id, a.Login, a.Nickname
+         FROM accounts a
+         INNER JOIN dg_discord_account d ON d.account_id = a.Id
+         WHERE d.discord_user_id = ?
+         ORDER BY a.Login ASC`,
+        [discordUserId]
+    );
+
+    return rows;
+}
+
+async function loadAccountForUser(pool, discordUserId, accountId) {
+    const [rows] = await pool.query(
+        `SELECT a.Id, a.Login, a.Nickname, a.SecretQuestion, a.SecretAnswer
+         FROM accounts a
+         INNER JOIN dg_discord_account d ON d.account_id = a.Id
+         WHERE d.discord_user_id = ? AND a.Id = ?
+         LIMIT 1`,
+        [discordUserId, accountId]
+    );
+
+    return rows[0] || null;
 }
 
 async function saveDraft(pool, discordUserId, payload) {
@@ -253,9 +334,125 @@ async function refreshAccountsPanel(interaction, ctx) {
     await panelMsg.edit(view);
 }
 
+async function handlePasswordButton(interaction, ctx) {
+    const pool = await ctx.db.getPool('auth');
+    if (!pool) {
+        return interaction.reply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+            ephemeral: true,
+        });
+    }
+
+    const accounts = await loadLinkedAccounts(pool, interaction.user.id);
+
+    if (!accounts.length) {
+        return interaction.reply({
+            content: '🔴 No tienes cuentas vinculadas para cambiar la contraseña.',
+            ephemeral: true,
+        });
+    }
+
+    const options = accounts.map(account => ({
+        label: account.Login,
+        description: account.Nickname ? `Apodo: ${account.Nickname}` : undefined,
+        value: String(account.Id),
+    }));
+
+    const selectRow = buildPassSelect(options);
+
+    return interaction.reply({
+        content: '🔑 **Cambiar contraseña**\nElige la cuenta que deseas actualizar:',
+        components: [selectRow],
+        ephemeral: true,
+    });
+}
+
+async function handlePasswordSelect(interaction, ctx) {
+    const pool = await ctx.db.getPool('auth');
+    if (!pool) {
+        return interaction.reply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+            ephemeral: true,
+        });
+    }
+
+    const accountId = Number.parseInt(interaction.values?.[0], 10);
+    if (!Number.isFinite(accountId)) {
+        return interaction.reply({
+            content: '🔴 Selección inválida. Intenta nuevamente.',
+            ephemeral: true,
+        });
+    }
+
+    const account = await loadAccountForUser(pool, interaction.user.id, accountId);
+    if (!account) {
+        return interaction.reply({
+            content: '🔴 No se encontró la cuenta seleccionada.',
+            ephemeral: true,
+        });
+    }
+
+    const modal = buildPasswordModal(account);
+    return interaction.showModal(modal);
+}
+
+async function handlePasswordModal(interaction, ctx) {
+    const pool = await ctx.db.getPool('auth');
+    if (!pool) {
+        return interaction.reply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+            ephemeral: true,
+        });
+    }
+
+    const accountId = Number.parseInt(interaction.customId.split(':').pop(), 10);
+    if (!Number.isFinite(accountId)) {
+        return interaction.reply({
+            content: '🔴 No se pudo identificar la cuenta seleccionada.',
+            ephemeral: true,
+        });
+    }
+
+    const newPassword = normalizeInput(interaction.fields.getTextInputValue(INPUTS.PASS_NEW));
+    const secretVerify = normalizeInput(interaction.fields.getTextInputValue(INPUTS.SECRET_VERIFY));
+
+    if (!newPassword || !secretVerify) {
+        return interaction.reply({
+            content: '🔴 Completa la nueva contraseña y la respuesta secreta.',
+            ephemeral: true,
+        });
+    }
+
+    const account = await loadAccountForUser(pool, interaction.user.id, accountId);
+    if (!account) {
+        return interaction.reply({
+            content: '🔴 No se encontró la cuenta seleccionada.',
+            ephemeral: true,
+        });
+    }
+
+    if (normalizeInput(account.SecretAnswer) !== secretVerify) {
+        return interaction.reply({
+            content: '🔴 La respuesta secreta no es correcta. No se cambió la contraseña.',
+            ephemeral: true,
+        });
+    }
+
+    const passwordHash = crypto.createHash('sha256').update(newPassword, 'utf8').digest('hex');
+
+    await pool.query('UPDATE accounts SET Password = ? WHERE Id = ?', [passwordHash, accountId]);
+
+    await interaction.reply({
+        content: `✅ Contraseña actualizada para **${account.Login}**.`,
+        ephemeral: true,
+    });
+
+    await refreshAccountsPanel(interaction, ctx);
+    return undefined;
+}
+
 async function handleAccountsButton(interaction, ctx) {
     const responses = {
-        'acc:pass': '🔑 **Cambiar contraseña**\nCambia tu contraseña, necesitas la respuesta secreta.',
         'acc:unstuck': '🧰 **Desbuguear pj**\nConfirma el nombre del personaje. Te avisaré cuando esté listo.',
         'acc:help': '🆘 **Ayuda rápida**\nUsa los botones para crear cuentas, cambiar contraseña o desbuguear personajes.',
     };
@@ -265,6 +462,9 @@ async function handleAccountsButton(interaction, ctx) {
         return interaction.showModal(modal);
     }
 
+    if (interaction.customId === 'acc:pass') {
+        return handlePasswordButton(interaction, ctx);
+    }
 
     const replyContent = responses[interaction.customId] || 'Acción no reconocida.';
 
@@ -398,11 +598,16 @@ async function handleAccountsModal(interaction, ctx) {
         return handleCreateStep2(interaction, ctx);
     }
 
+    if (interaction.customId.startsWith(`${MODALS.PASS_UPDATE}:`)) {
+        return handlePasswordModal(interaction, ctx);
+    }
+
     return refreshAccountsPanel(interaction, ctx);
 }
 
 module.exports = {
     handleAccountsButton,
     handleAccountsModal,
+    handlePasswordSelect,
     refreshAccountsPanel,
 };
