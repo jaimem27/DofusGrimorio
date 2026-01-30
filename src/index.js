@@ -5,7 +5,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 const { createRuntimeDb } = require('./db/runtime.js');
 const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
-const { handleAccountsButton, refreshAccountsPanel } = require('./commands/cuentas/handler.js');
+const { handleAccountsButton, handleAccountsModal, refreshAccountsPanel } = require('./commands/cuentas/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
 
 
@@ -93,7 +93,7 @@ async function bootstrap() {
             }
 
             if (interaction.isModalSubmit() && interaction.customId.startsWith('acc:')) {
-                return refreshAccountsPanel(interaction, ctx);
+                return handleAccountsModal(interaction, ctx);
             }
 
         } catch (err) {

@@ -28,6 +28,15 @@ async function runMigrations(grimPool) {
       KEY idx_user_time (discord_user_id, created_at)
     ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
     `,
+    `
+    CREATE TABLE IF NOT EXISTS dg_create_draft (
+      discord_user_id VARCHAR(32) NOT NULL,
+      payload MEDIUMTEXT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (discord_user_id),
+      KEY idx_created_at (created_at)
+    ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+    `,
     `CREATE TABLE IF NOT EXISTS dg_config(
       \`Key\` VARCHAR(64) NOT NULL,
       \`Value\` MEDIUMTEXT NOT NULL,
