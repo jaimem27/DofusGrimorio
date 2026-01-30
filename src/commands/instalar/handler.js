@@ -200,7 +200,7 @@ async function handleInstallButton(interaction, ctx) {
 
         if (missingAuth.length || missingWorld.length) {
             return interaction.reply({
-                content: 'Falta configurar AUTH o WORLD antes de finalizar.',
+                content: '🟡 Falta configurar AUTH o WORLD antes de finalizar.',
                 ephemeral: true,
             });
         }
@@ -215,7 +215,7 @@ async function handleInstallButton(interaction, ctx) {
 
         if (!authRes.ok) {
             return interaction.reply({
-                content: `AUTH: fallo de conexión.\n${dbHintFromError(authRes.err, 'AUTH')}`,
+                content: `🔴 AUTH: fallo de conexión.\n${dbHintFromError(authRes.err, 'AUTH')}`,
                 ephemeral: true,
             });
         }
@@ -230,7 +230,7 @@ async function handleInstallButton(interaction, ctx) {
 
         if (!worldRes.ok) {
             return interaction.reply({
-                content: `WORLD: fallo de conexión.\n${dbHintFromError(worldRes.err, 'WORLD')}`,
+                content: `🔴 WORLD: fallo de conexión.\n${dbHintFromError(worldRes.err, 'WORLD')}`,
                 ephemeral: true,
             });
         }
@@ -269,7 +269,7 @@ async function handleInstallButton(interaction, ctx) {
         await db.config.set('install.done', '1');
 
         await interaction.reply({
-            content: 'Instalación completada. Ya puedes usar DofusGrimorio.',
+            content: '🟢 Instalación completada. Ya puedes usar Dofus Grimorio.',
             ephemeral: true,
         });
 
@@ -341,7 +341,7 @@ async function handleInstallModal(interaction, ctx) {
             });
         } catch (err) {
             return interaction.reply({
-                content: `No se pudo preparar la base de datos AUTH.\n${dbHintFromError(err, 'AUTH')}`,
+                content: `🔴 No se pudo preparar la base de datos AUTH.\n${dbHintFromError(err, 'AUTH')}`,
                 ephemeral: true,
             });
         }

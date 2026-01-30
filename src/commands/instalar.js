@@ -11,7 +11,7 @@ function isAdmin(interaction) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('instalar')
-        .setDescription('Configura Dofus Grimorio.)'),
+        .setDescription('Configura las Base de datos de Dofus Grimorio y tu Servidor.)'),
 
     async execute(interaction, ctx) {
         if (!isAdmin(interaction)) {

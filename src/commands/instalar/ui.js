@@ -8,29 +8,60 @@ const IDS = {
 };
 
 function statusLine(ok, label) {
-    return ok ? `${label}: Configurado` : `${label}: Pendiente`;
+    return `${label} · ${ok ? '🟢 Configurado' : '🟡 Pendiente'}`;
+}
+
+function row(label, icon, text) {
+    const col1 = label.padEnd(11, ' '); // ancho fijo (ajústalo si quieres)
+    const sep = '│';                    // mejor que "·" para tabla
+    return `${col1} ${sep} ${icon} ${text}`;
 }
 
 function buildInstallEmbed(state) {
+    const statusLines = [
+        row(
+            'AUTH',
+            state.authConfigured ? '🟢' : '🟡',
+            state.authConfigured ? 'Configurado' : 'Pendiente'
+        ),
+        row(
+            'WORLD',
+            state.worldConfigured ? '🟢' : '🟡',
+            state.worldConfigured ? 'Configurado' : 'Pendiente'
+        ),
+        row(
+            'Tablas',
+            state.tablesReady ? '🟢' : '🟡',
+            state.tablesReady ? 'Creadas' : 'Pendiente'
+        ),
+        row(
+            'Instalación',
+            state.installed ? '🟢' : '🟡',
+            state.installed ? 'Completada' : 'En proceso'
+        ),
+    ];
+
     const embed = new EmbedBuilder()
-        .setTitle('📘 DofusGrimorio — Instalación')
+        .setTitle('📘 Dofus Grimorio — Configuración de la Base de datos 📘')
         .setDescription(
             [
                 'Configura la conexión a tu servidor Dofus desde aquí.',
                 'Solo necesitas los datos de base de datos **AUTH** y **WORLD**.',
                 '',
-                '**Estado:**',
-                `${statusLine(state.authConfigured, 'AUTH')}`,
-                `${statusLine(state.worldConfigured, 'WORLD')}`,
-                state.tablesReady ? 'Tablas Grimorio: OK' : 'Tablas Grimorio: Pendiente',
-                state.installed ? 'Instalación: Completada' : 'Instalación: No finalizada',
+                '🧭 **Estado de la instalación**',
+                '```',
+                ...statusLines,
+                '```',
+                '',
+                '💡 **Tip:** Configura **AUTH** y **WORLD** y luego pulsa **Probar y finalizar** para probar la conexión.',
             ].join('\n')
         )
         .setColor(0xff8000)
-        .setFooter({ text: 'Tip: Configura AUTH y WORLD y luego pulsa “Probar y finalizar”.' });
+        .setFooter({ text: 'Asistente de instalación · Dofus Grimorio.' });
 
     return embed;
 }
+
 
 function buildInstallButtons(state) {
     const row = new ActionRowBuilder().addComponents(
