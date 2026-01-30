@@ -170,14 +170,14 @@ async function createAccounts(pool, discordUserId, payload) {
         const loginPlaceholders = logins.map(() => '?').join(', ');
         const nickPlaceholders = nicknames.map(() => '?').join(', ');
         const [existing] = await conn.query(
-            `SELECT login, nickname FROM accounts
-             WHERE login IN (${loginPlaceholders}) OR nickname IN (${nickPlaceholders})`,
+            `SELECT Login, Nickname FROM accounts
+             WHERE Login IN (${loginPlaceholders}) OR Nickname IN (${nickPlaceholders})`,
             [...logins, ...nicknames]
         );
 
         if (existing.length) {
-            const takenLogins = new Set(existing.map(row => row.login));
-            const takenNicks = new Set(existing.map(row => row.nickname));
+            const takenLogins = new Set(existing.map(row => row.Login));
+            const takenNicks = new Set(existing.map(row => row.Nickname));
             const loginClashes = logins.filter(login => takenLogins.has(login));
             const nickClashes = nicknames.filter(nick => takenNicks.has(nick));
             const parts = [];
@@ -191,7 +191,7 @@ async function createAccounts(pool, discordUserId, payload) {
             const login = logins[i];
             const nickname = nicknames[i];
             const [result] = await conn.query(
-                `INSERT INTO accounts (login, password, nickname, email, question, answer)
+                `INSERT INTO accounts (Login, Password, Nickname, Email, SecretQuestion, SecretAnswer)
                  VALUES (?, ?, ?, ?, ?, ?)`,
                 [
                     login,
