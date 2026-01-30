@@ -291,7 +291,7 @@ async function handleAccountsButton(interaction, ctx) {
 }
 
 async function handleCreateStep1(interaction, ctx) {
-    const pool = ctx.db.getPool();
+    const pool = await ctx.db.getPool('auth');;
     if (!pool) {
         return interaction.reply({
             content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
@@ -333,7 +333,7 @@ async function handleCreateStep1(interaction, ctx) {
 }
 
 async function handleCreateStep2(interaction, ctx) {
-    const pool = ctx.db.getPool();
+    const pool = await ctx.db.getPool('auth');;
     if (!pool) {
         return interaction.reply({
             content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
