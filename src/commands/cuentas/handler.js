@@ -17,6 +17,10 @@ const MODALS = {
     PASS_UPDATE: 'acc.modal:pass',
 };
 
+const BUTTONS = {
+    CREATE_STEP2: 'acc:create:step2',
+};
+
 const SELECTS = {
     PASS_ACCOUNT: 'acc:pass:select',
     UNSTUCK_ACCOUNT: 'acc.sel:unstuck_account',
@@ -101,6 +105,16 @@ function buildCreateModalStep2() {
             new ActionRowBuilder().addComponents(secretQ),
             new ActionRowBuilder().addComponents(secretA)
         );
+}
+
+function buildCreateStep2Button() {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(BUTTONS.CREATE_STEP2)
+            .setLabel('Continuar')
+            .setEmoji('➡️')
+            .setStyle(ButtonStyle.Primary)
+    );
 }
 
 function buildPassSelect(options) {
@@ -856,6 +870,12 @@ async function handleAccountsButton(interaction, ctx) {
         return interaction.showModal(modal);
     }
 
+    if (interaction.customId === BUTTONS.CREATE_STEP2) {
+        const modal = buildCreateModalStep2();
+        return interaction.showModal(modal);
+    }
+
+
     if (interaction.customId === 'acc:pass') {
         return handlePasswordButton(interaction, ctx);
     }
@@ -935,8 +955,12 @@ async function handleCreateStep1(interaction, ctx) {
             email,
         });
 
-        const modal = buildCreateModalStep2();
-        return interaction.showModal(modal);
+        const step2Button = buildCreateStep2Button();
+        return interaction.reply({
+            content: '✅ Paso 1 guardado. Pulsa **Continuar** para completar el Paso 2.',
+            components: [step2Button],
+            ephemeral: true,
+        });
     } catch (error) {
         console.error('Error in account create step 1 modal:', error);
         return replyWithError(
