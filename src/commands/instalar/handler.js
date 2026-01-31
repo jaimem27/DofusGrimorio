@@ -3,6 +3,7 @@ const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, Act
 const { buildInstallView, IDS } = require('./ui.js');
 const { dbHintFromError } = require('../../db/errorHints.js');
 const { runMigrations } = require('../../db/migrate.js');
+const { saveBootstrapConfig, clearBootstrapConfig } = require('../../db/bootstrap.js');
 const mysql2 = require('mysql2/promise');
 
 const MODALS = {
@@ -187,6 +188,7 @@ async function handleInstallButton(interaction, ctx) {
         await db.config.delPrefix('auth.');
         await db.config.delPrefix('world.');
         await db.config.set('install.done', '0');
+        clearBootstrapConfig();
 
         await interaction.deferUpdate();
         return refreshPanel(interaction, ctx);
@@ -338,6 +340,13 @@ async function handleInstallModal(interaction, ctx) {
                 password,
                 database: dbname,
                 migrate: false,
+            });
+            saveBootstrapConfig({
+                host,
+                port,
+                user,
+                password,
+                database: dbname,
             });
         } catch (err) {
             return interaction.reply({

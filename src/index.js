@@ -4,6 +4,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 const { createRuntimeDb } = require('./db/runtime.js');
+const { loadBootstrapConfig } = require('./db/bootstrap.js');
 const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
 const { handleAccountsButton, handleAccountsModal, handleAccountsSelect } = require('./commands/cuentas/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
@@ -36,7 +37,22 @@ function resolveBrandingPath(filename) {
 }
 
 async function bootstrap() {
-
+    const bootstrapConfig = loadBootstrapConfig();
+    if (bootstrapConfig) {
+        try {
+            await ctx.db.useMysqlConfig({
+                host: bootstrapConfig.host,
+                port: bootstrapConfig.port,
+                user: bootstrapConfig.user,
+                password: bootstrapConfig.password,
+                database: bootstrapConfig.database,
+            });
+            if (logInfo) logInfo('Configuración de BD cargada desde dg_config.');
+        } catch (err) {
+            if (logError) logError(err, 'No se pudo cargar la configuración guardada de BD.');
+        }
+    }
+    
     client.on('interactionCreate', async (interaction) => {
         try {
             const { buildInstallView } = require('./commands/instalar/ui.js');
@@ -79,7 +95,7 @@ async function bootstrap() {
                 ctx.accountsPanelChannelId = interaction.channelId;
                 return;
             }
-            
+
             if (interaction.isButton() && interaction.customId.startsWith('dg:install:')) {
                 return handleInstallButton(interaction, ctx);
             }

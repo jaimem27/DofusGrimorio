@@ -8,6 +8,7 @@ yarn-error.log
 .env.local
 .env.*.local
 logs/
+.dg_bootstrap.json
 
 # Sistema
 .DS_Store

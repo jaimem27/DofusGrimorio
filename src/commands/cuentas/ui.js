@@ -33,7 +33,7 @@ function buildAccountsEmbed() {
                 value: [
                     '• Nombres / apariencia / gestión in-game.',
                     '• Todos los datos personales nunca se muestran en el canal y solo serán visibles para el usuario.',
-                    '• Si algo falla: usa 🆘 Ayuda o contacta con el Staff.',
+                    '• Si algo falla: contacta con el Staff o reintantalo en 30s.',
                 ].join('\n'),
             }
         )
@@ -58,11 +58,6 @@ function buildAccountsButtons() {
             .setLabel('Desbuguear pj')
             .setEmoji('🧰')
             .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-            .setCustomId(IDS.BTN_HELP)
-            .setLabel('Ayuda')
-            .setEmoji('🆘')
-            .setStyle(ButtonStyle.Secondary)
     );
 }
 

@@ -872,9 +872,6 @@ async function handleUnstuckCancel(interaction) {
 }
 
 async function handleAccountsButton(interaction, ctx) {
-    const responses = {
-        'acc:help': '🆘 **Ayuda rápida**\nUsa los botones para crear cuentas, cambiar contraseña o desbuguear personajes.',
-    };
 
     if (interaction.customId === 'acc:create') {
         const modal = buildCreateModalStep1();
