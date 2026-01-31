@@ -5,6 +5,9 @@ const {
     TextInputStyle,
     ActionRowBuilder,
     StringSelectMenuBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
 } = require('discord.js');
 const { buildAccountsView } = require('./ui.js');
 
@@ -16,6 +19,7 @@ const MODALS = {
 
 const SELECTS = {
     PASS_ACCOUNT: 'acc:pass:select',
+    UNSTUCK_ACCOUNT: 'acc.sel:unstuck_account',
 };
 
 const INPUTS = {
@@ -146,6 +150,50 @@ function buildPasswordModal(account) {
         );
 }
 
+function buildUnstuckAccountSelect(options) {
+    const select = new StringSelectMenuBuilder()
+        .setCustomId(SELECTS.UNSTUCK_ACCOUNT)
+        .setPlaceholder('Elige cuenta')
+        .addOptions(options);
+
+    return new ActionRowBuilder().addComponents(select);
+}
+
+function buildUnstuckCharacterSelect(accountId, options) {
+    const select = new StringSelectMenuBuilder()
+        .setCustomId(`acc.sel:unstuck_char:${accountId}`)
+        .setPlaceholder('Elige personaje')
+        .addOptions(options);
+
+    return new ActionRowBuilder().addComponents(select);
+}
+
+function buildUnstuckConfirmation(name, mapId, cellId, charId, accountId) {
+    const embed = new EmbedBuilder()
+        .setTitle('🧰 Confirmar desbugueo')
+        .setDescription(`Vas a desbuguear: **${name}**`)
+        .addFields({
+            name: 'Se moverá a',
+            value: `Mapa: **${mapId}**\nCelda: **${cellId}**`,
+        })
+        .setColor(0x2f3136);
+
+    const buttons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`acc:unstuck:confirm:${charId}:${accountId}`)
+            .setLabel('Confirmar')
+            .setEmoji('✅')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId('acc:unstuck:cancel')
+            .setLabel('Cancelar')
+            .setEmoji('❌')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embed, buttons };
+}
+
 function parseQty(raw) {
     const qty = Number.parseInt(String(raw).trim(), 10);
     if (!Number.isFinite(qty)) return null;
@@ -181,6 +229,74 @@ async function loadAccountForUser(pool, discordUserId, accountId) {
     );
 
     return rows[0] || null;
+}
+
+async function loadAllowedAccountIds(pool, discordUserId) {
+    const [rows] = await pool.query(
+        `SELECT account_id
+         FROM dg_discord_account
+         WHERE discord_user_id = ?`,
+        [discordUserId]
+    );
+
+    return rows.map(row => Number(row.account_id)).filter(Number.isFinite);
+}
+
+async function loadWorldAccounts(pool, accountIds) {
+    if (!accountIds.length) return [];
+    const placeholders = accountIds.map(() => '?').join(', ');
+    const [rows] = await pool.query(
+        `SELECT Id, Nickname, LastConnection
+         FROM accounts
+         WHERE Id IN (${placeholders})`,
+        accountIds
+    );
+
+    return rows;
+}
+
+async function loadCharactersForAccount(pool, accountId) {
+    const [rows] = await pool.query(
+        `SELECT Id, Name, Breed, MapId, CellId, LastUsage
+         FROM characters
+         WHERE AccountId = ?
+         ORDER BY LastUsage DESC
+         LIMIT 25`,
+        [accountId]
+    );
+
+    return rows;
+}
+
+async function loadCharacterById(pool, charId) {
+    const [rows] = await pool.query(
+        `SELECT Id, Name, Breed, AccountId
+         FROM characters
+         WHERE Id = ?
+         LIMIT 1`,
+        [charId]
+    );
+
+    return rows[0] || null;
+}
+
+async function loadStartPosition(pool, breedId) {
+    const [rows] = await pool.query(
+        `SELECT StartMap, StartCell
+         FROM breeds
+         WHERE Id = ?
+         LIMIT 1`,
+        [breedId]
+    );
+
+    return rows[0] || null;
+}
+
+function formatOptionalDate(raw) {
+    if (!raw) return 'N/A';
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return String(raw);
+    return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
 async function saveDraft(pool, discordUserId, payload) {
@@ -451,9 +567,247 @@ async function handlePasswordModal(interaction, ctx) {
     return undefined;
 }
 
+async function handleUnstuckButton(interaction, ctx) {
+    if (!interaction.replied && !interaction.deferred) {
+        await interaction.deferReply({ ephemeral: true });
+    }
+
+    const authPool = await ctx.db.getPool('auth');
+    const worldPool = await ctx.db.getPool('world');
+    if (!authPool || !worldPool) {
+        return interaction.editReply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+        });
+    }
+
+    const accountIds = await loadAllowedAccountIds(authPool, interaction.user.id);
+
+    if (!accountIds.length) {
+        return interaction.editReply({
+            content: '🔴 No tienes cuentas vinculadas. Usa ✅ Crear cuenta(s).',
+        });
+    }
+
+    const worldAccounts = await loadWorldAccounts(worldPool, accountIds);
+    const availableAccounts = worldAccounts.filter(row => accountIds.includes(Number(row.Id)));
+
+    if (!availableAccounts.length) {
+        return interaction.editReply({
+            content: '🔴 No hay cuentas disponibles in-game para desbuguear.',
+        });
+    }
+
+    const options = availableAccounts.map(account => ({
+        label: account.Nickname || `Cuenta #${account.Id}`,
+        description: account.LastConnection
+            ? `Última conexión: ${formatOptionalDate(account.LastConnection)}`
+            : undefined,
+        value: String(account.Id),
+    }));
+
+    const selectRow = buildUnstuckAccountSelect(options);
+
+    return interaction.editReply({
+        content: '🧰 **Desbuguear pj**\nElige la cuenta que deseas revisar:',
+        components: [selectRow],
+    });
+}
+
+async function handleUnstuckAccountSelect(interaction, ctx) {
+    const authPool = await ctx.db.getPool('auth');
+    const worldPool = await ctx.db.getPool('world');
+    if (!authPool || !worldPool) {
+        return interaction.reply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+            ephemeral: true,
+        });
+    }
+
+    const accountId = Number.parseInt(interaction.values?.[0], 10);
+    if (!Number.isFinite(accountId)) {
+        return interaction.reply({
+            content: '🔴 Selección inválida. Intenta nuevamente.',
+            ephemeral: true,
+        });
+    }
+
+    const [rows] = await authPool.query(
+        `SELECT 1
+         FROM dg_discord_account
+         WHERE discord_user_id = ?
+           AND account_id = ?
+         LIMIT 1`,
+        [interaction.user.id, accountId]
+    );
+
+    if (!rows.length) {
+        return interaction.reply({
+            content: '🔴 Acceso denegado.',
+            ephemeral: true,
+        });
+    }
+
+    const characters = await loadCharactersForAccount(worldPool, accountId);
+
+    if (!characters.length) {
+        return interaction.reply({
+            content: '🔴 Esa cuenta no tiene personajes.',
+            ephemeral: true,
+        });
+    }
+
+    const options = characters.map(character => ({
+        label: character.Name,
+        value: String(character.Id),
+        description: character.LastUsage
+            ? `Último uso: ${formatOptionalDate(character.LastUsage)}`
+            : `Mapa: ${character.MapId ?? 'N/A'}`,
+    }));
+
+    const selectRow = buildUnstuckCharacterSelect(accountId, options);
+
+    return interaction.reply({
+        content: '🧰 **Desbuguear pj**\nElige el personaje:',
+        components: [selectRow],
+        ephemeral: true,
+    });
+}
+
+async function handleUnstuckCharacterSelect(interaction, ctx) {
+    const worldPool = await ctx.db.getPool('world');
+    if (!worldPool) {
+        return interaction.reply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+            ephemeral: true,
+        });
+    }
+
+    const parts = interaction.customId.split(':');
+    const accountId = Number.parseInt(parts[parts.length - 1], 10);
+    const charId = Number.parseInt(interaction.values?.[0], 10);
+
+    if (!Number.isFinite(accountId) || !Number.isFinite(charId)) {
+        return interaction.reply({
+            content: '🔴 Selección inválida. Intenta nuevamente.',
+            ephemeral: true,
+        });
+    }
+
+    const character = await loadCharacterById(worldPool, charId);
+    if (!character || Number(character.AccountId) !== accountId) {
+        return interaction.reply({
+            content: '🔴 Acceso denegado.',
+            ephemeral: true,
+        });
+    }
+
+    const startPosition = await loadStartPosition(worldPool, character.Breed);
+    if (!startPosition) {
+        return interaction.reply({
+            content: '🔴 No se pudo obtener la posición inicial del personaje.',
+            ephemeral: true,
+        });
+    }
+
+    const { embed, buttons } = buildUnstuckConfirmation(
+        character.Name,
+        startPosition.StartMap,
+        startPosition.StartCell,
+        charId,
+        accountId
+    );
+
+    return interaction.reply({
+        embeds: [embed],
+        components: [buttons],
+        ephemeral: true,
+    });
+}
+
+async function handleUnstuckConfirm(interaction, ctx) {
+    const worldPool = await ctx.db.getPool('world');
+    const authPool = await ctx.db.getPool('auth');
+    if (!worldPool || !authPool) {
+        return interaction.reply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+            ephemeral: true,
+        });
+    }
+
+    const parts = interaction.customId.split(':');
+    const charId = Number.parseInt(parts[parts.length - 2], 10);
+    const accountId = Number.parseInt(parts[parts.length - 1], 10);
+
+    if (!Number.isFinite(charId) || !Number.isFinite(accountId)) {
+        return interaction.reply({
+            content: '🔴 Solicitud inválida.',
+            ephemeral: true,
+        });
+    }
+
+    const [charRows] = await worldPool.query(
+        `SELECT AccountId, Breed, Name
+         FROM characters
+         WHERE Id = ?
+         LIMIT 1`,
+        [charId]
+    );
+
+    const character = charRows[0];
+    if (!character || Number(character.AccountId) !== accountId) {
+        return interaction.reply({
+            content: '🔴 Acceso denegado.',
+            ephemeral: true,
+        });
+    }
+
+    const [authRows] = await authPool.query(
+        `SELECT 1
+         FROM dg_discord_account
+         WHERE discord_user_id = ?
+           AND account_id = ?
+         LIMIT 1`,
+        [interaction.user.id, accountId]
+    );
+
+    if (!authRows.length) {
+        return interaction.reply({
+            content: '🔴 Acceso denegado.',
+            ephemeral: true,
+        });
+    }
+
+    const startPosition = await loadStartPosition(worldPool, character.Breed);
+    if (!startPosition) {
+        return interaction.reply({
+            content: '🔴 No se pudo obtener la posición inicial del personaje.',
+            ephemeral: true,
+        });
+    }
+
+    await worldPool.query(
+        `UPDATE characters
+         SET MapId = ?, CellId = ?
+         WHERE Id = ?`,
+        [startPosition.StartMap, startPosition.StartCell, charId]
+    );
+
+    return interaction.reply({
+        content: `✅ Personaje desbugueado correctamente.\n${character.Name} → MapId ${startPosition.StartMap} / CellId ${startPosition.StartCell}.`,
+        ephemeral: true,
+    });
+}
+
+async function handleUnstuckCancel(interaction) {
+    return interaction.update({
+        content: 'Cancelado.',
+        components: [],
+        embeds: [],
+    });
+}
+
 async function handleAccountsButton(interaction, ctx) {
     const responses = {
-        'acc:unstuck': '🧰 **Desbuguear pj**\nConfirma el nombre del personaje. Te avisaré cuando esté listo.',
         'acc:help': '🆘 **Ayuda rápida**\nUsa los botones para crear cuentas, cambiar contraseña o desbuguear personajes.',
     };
 
@@ -464,6 +818,18 @@ async function handleAccountsButton(interaction, ctx) {
 
     if (interaction.customId === 'acc:pass') {
         return handlePasswordButton(interaction, ctx);
+    }
+
+    if (interaction.customId === 'acc:unstuck') {
+        return handleUnstuckButton(interaction, ctx);
+    }
+
+    if (interaction.customId.startsWith('acc:unstuck:confirm:')) {
+        return handleUnstuckConfirm(interaction, ctx);
+    }
+
+    if (interaction.customId === 'acc:unstuck:cancel') {
+        return handleUnstuckCancel(interaction, ctx);
     }
 
     const replyContent = responses[interaction.customId] || 'Acción no reconocida.';
@@ -605,9 +971,29 @@ async function handleAccountsModal(interaction, ctx) {
     return refreshAccountsPanel(interaction, ctx);
 }
 
+async function handleAccountsSelect(interaction, ctx) {
+    if (interaction.customId === SELECTS.PASS_ACCOUNT) {
+        return handlePasswordSelect(interaction, ctx);
+    }
+
+    if (interaction.customId === SELECTS.UNSTUCK_ACCOUNT) {
+        return handleUnstuckAccountSelect(interaction, ctx);
+    }
+
+    if (interaction.customId.startsWith('acc.sel:unstuck_char:')) {
+        return handleUnstuckCharacterSelect(interaction, ctx);
+    }
+
+    return interaction.reply({
+        content: '🔴 Selección no reconocida.',
+        ephemeral: true,
+    });
+}
+
 module.exports = {
     handleAccountsButton,
     handleAccountsModal,
     handlePasswordSelect,
+    handleAccountsSelect,
     refreshAccountsPanel,
 };
