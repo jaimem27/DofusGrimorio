@@ -145,7 +145,6 @@ function buildPasswordModal(account) {
         .setLabel('Respuesta secreta')
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
-        .setValue(account.SecretAnswer || '');
 
     const secretVerify = new TextInputBuilder()
         .setCustomId(INPUTS.SECRET_VERIFY)
@@ -668,20 +667,22 @@ async function handleUnstuckButton(interaction, ctx) {
 }
 
 async function handleUnstuckAccountSelect(interaction, ctx) {
+    await interaction.deferUpdate();
+
     const authPool = await ctx.db.getPool('auth');
     const worldPool = await ctx.db.getPool('world');
     if (!authPool || !worldPool) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
-            ephemeral: true,
+            components: [],
         });
     }
 
     const accountId = Number.parseInt(interaction.values?.[0], 10);
     if (!Number.isFinite(accountId)) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 Selección inválida. Intenta nuevamente.',
-            ephemeral: true,
+            components: [],
         });
     }
 
@@ -695,18 +696,18 @@ async function handleUnstuckAccountSelect(interaction, ctx) {
     );
 
     if (!rows.length) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 Acceso denegado.',
-            ephemeral: true,
+            components: [],
         });
     }
 
     const characters = await loadCharactersForAccount(worldPool, accountId);
 
     if (!characters.length) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 Esa cuenta no tiene personajes.',
-            ephemeral: true,
+            components: [],
         });
     }
 
@@ -720,19 +721,21 @@ async function handleUnstuckAccountSelect(interaction, ctx) {
 
     const selectRow = buildUnstuckCharacterSelect(accountId, options);
 
-    return interaction.reply({
+    return interaction.editReply({
         content: '🧰 **Desbuguear pj**\nElige el personaje:',
         components: [selectRow],
-        ephemeral: true,
     });
 }
 
 async function handleUnstuckCharacterSelect(interaction, ctx) {
+    await interaction.deferUpdate();
+
     const worldPool = await ctx.db.getPool('world');
     if (!worldPool) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
-            ephemeral: true,
+            ephemeral: [],
+            embeds: [],
         });
     }
 
@@ -741,25 +744,26 @@ async function handleUnstuckCharacterSelect(interaction, ctx) {
     const charId = Number.parseInt(interaction.values?.[0], 10);
 
     if (!Number.isFinite(accountId) || !Number.isFinite(charId)) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 Selección inválida. Intenta nuevamente.',
-            ephemeral: true,
+            components: [],
+            embeds: [],
         });
     }
 
     const character = await loadCharacterById(worldPool, charId);
     if (!character || Number(character.AccountId) !== accountId) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 Acceso denegado.',
-            ephemeral: true,
+            components: [],
+            embeds: [],
         });
     }
 
     const startPosition = await loadStartPosition(worldPool, character.Breed);
     if (!startPosition) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 No se pudo obtener la posición inicial del personaje.',
-            ephemeral: true,
         });
     }
 
@@ -771,20 +775,22 @@ async function handleUnstuckCharacterSelect(interaction, ctx) {
         accountId
     );
 
-    return interaction.reply({
+    return interaction.editReply({
         embeds: [embed],
         components: [buttons],
-        ephemeral: true,
     });
 }
 
 async function handleUnstuckConfirm(interaction, ctx) {
+    await interaction.deferUpdate();
+
     const worldPool = await ctx.db.getPool('world');
     const authPool = await ctx.db.getPool('auth');
     if (!worldPool || !authPool) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
-            ephemeral: true,
+            components: [],
+            embeds: [],
         });
     }
 
@@ -793,9 +799,10 @@ async function handleUnstuckConfirm(interaction, ctx) {
     const accountId = Number.parseInt(parts[parts.length - 1], 10);
 
     if (!Number.isFinite(charId) || !Number.isFinite(accountId)) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 Solicitud inválida.',
-            ephemeral: true,
+            components: [],
+            embeds: [],
         });
     }
 
@@ -809,9 +816,10 @@ async function handleUnstuckConfirm(interaction, ctx) {
 
     const character = charRows[0];
     if (!character || Number(character.AccountId) !== accountId) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 Acceso denegado.',
-            ephemeral: true,
+            components: [],
+            embeds: [],
         });
     }
 
@@ -825,17 +833,19 @@ async function handleUnstuckConfirm(interaction, ctx) {
     );
 
     if (!authRows.length) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 Acceso denegado.',
-            ephemeral: true,
+            components: [],
+            embeds: [],
         });
     }
 
     const startPosition = await loadStartPosition(worldPool, character.Breed);
     if (!startPosition) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '🔴 No se pudo obtener la posición inicial del personaje.',
-            ephemeral: true,
+            components: [],
+            embeds: [],
         });
     }
 
@@ -846,9 +856,10 @@ async function handleUnstuckConfirm(interaction, ctx) {
         [startPosition.StartMap, startPosition.StartCell, charId]
     );
 
-    return interaction.reply({
+    return interaction.editReply({
         content: `✅ Personaje desbugueado correctamente.\n${character.Name} → MapId ${startPosition.StartMap} / CellId ${startPosition.StartCell}.`,
-        ephemeral: true,
+        components: [],
+        embeds: [],
     });
 }
 
