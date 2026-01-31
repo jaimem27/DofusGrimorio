@@ -205,6 +205,29 @@ function normalizeInput(value) {
     return String(value ?? '').trim();
 }
 
+function buildErrorDetails(error) {
+    if (!error) return null;
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === 'string') return error;
+    return null;
+}
+
+async function replyWithError(interaction, baseMessage, error) {
+    const details = buildErrorDetails(error);
+    const content = details
+        ? `${baseMessage}\n\n\`\`\`\n${details}\n\`\`\``
+        : baseMessage;
+
+    if (interaction.replied || interaction.deferred) {
+        return interaction.editReply({ content });
+    }
+
+    return interaction.reply({
+        content,
+        ephemeral: true,
+    });
+}
+
 async function loadLinkedAccounts(pool, discordUserId) {
     const [rows] = await pool.query(
         `SELECT a.Id, a.Login, a.Nickname
@@ -857,102 +880,120 @@ async function handleAccountsButton(interaction, ctx) {
 }
 
 async function handleCreateStep1(interaction, ctx) {
-    const pool = await ctx.db.getPool('auth');;
-    if (!pool) {
-        return interaction.reply({
-            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
-            ephemeral: true,
+    try {
+        const pool = await ctx.db.getPool('auth');;
+        if (!pool) {
+            return interaction.reply({
+                content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+                ephemeral: true,
+            });
+        }
+
+        const qtyRaw = interaction.fields.getTextInputValue(INPUTS.QTY);
+        const loginBase = normalizeInput(interaction.fields.getTextInputValue(INPUTS.LOGIN));
+        const nicknameBase = normalizeInput(interaction.fields.getTextInputValue(INPUTS.NICK));
+        const password = normalizeInput(interaction.fields.getTextInputValue(INPUTS.PASS));
+        const email = normalizeInput(interaction.fields.getTextInputValue(INPUTS.EMAIL));
+
+        const qty = parseQty(qtyRaw);
+        if (!qty) {
+            return interaction.reply({
+                content: '🔴 El número de cuentas debe ser entre 1 y 8.',
+                ephemeral: true,
+            });
+        }
+
+        if (!loginBase || !nicknameBase || !password) {
+            return interaction.reply({
+                content: '🔴 Completa usuario, apodo y contraseña.',
+                ephemeral: true,
+            });
+        }
+
+        await saveDraft(pool, interaction.user.id, {
+            qty,
+            loginBase,
+            nicknameBase,
+            password,
+            email,
         });
+
+        const modal = buildCreateModalStep2();
+        return interaction.showModal(modal);
+    } catch (error) {
+        console.error('Error in account create step 1 modal:', error);
+        return replyWithError(
+            interaction,
+            '🔴 Algo falló al procesar el formulario. Intenta de nuevo o avisa al Staff.',
+            error
+        );
     }
-
-    const qtyRaw = interaction.fields.getTextInputValue(INPUTS.QTY);
-    const loginBase = normalizeInput(interaction.fields.getTextInputValue(INPUTS.LOGIN));
-    const nicknameBase = normalizeInput(interaction.fields.getTextInputValue(INPUTS.NICK));
-    const password = normalizeInput(interaction.fields.getTextInputValue(INPUTS.PASS));
-    const email = normalizeInput(interaction.fields.getTextInputValue(INPUTS.EMAIL));
-
-    const qty = parseQty(qtyRaw);
-    if (!qty) {
-        return interaction.reply({
-            content: '🔴 El número de cuentas debe ser entre 1 y 8.',
-            ephemeral: true,
-        });
-    }
-
-    if (!loginBase || !nicknameBase || !password) {
-        return interaction.reply({
-            content: '🔴 Completa usuario, apodo y contraseña.',
-            ephemeral: true,
-        });
-    }
-
-    await saveDraft(pool, interaction.user.id, {
-        qty,
-        loginBase,
-        nicknameBase,
-        password,
-        email,
-    });
-
-    const modal = buildCreateModalStep2();
-    return interaction.showModal(modal);
 }
 
 async function handleCreateStep2(interaction, ctx) {
-    const pool = await ctx.db.getPool('auth');;
-    if (!pool) {
-        return interaction.reply({
-            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+    try {
+        const pool = await ctx.db.getPool('auth');;
+        if (!pool) {
+            return interaction.reply({
+                content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+                ephemeral: true,
+            });
+        }
+
+        const secretQuestion = normalizeInput(interaction.fields.getTextInputValue(INPUTS.SECRET_Q));
+        const secretAnswer = normalizeInput(interaction.fields.getTextInputValue(INPUTS.SECRET_A));
+
+        if (!secretQuestion || !secretAnswer) {
+            return interaction.reply({
+                content: '🔴 Debes completar la pregunta y respuesta secreta.',
+                ephemeral: true,
+            });
+        }
+
+        const draft = await loadDraft(pool, interaction.user.id);
+        await deleteDraft(pool, interaction.user.id);
+
+        if (!draft) {
+            return interaction.reply({
+                content: '🟡 El formulario expiró. Intenta nuevamente.',
+                ephemeral: true,
+            });
+        }
+
+        const payload = {
+            ...draft,
+            secretQuestion,
+            secretAnswer,
+        };
+
+        const result = await createAccounts(pool, interaction.user.id, payload);
+
+        if (!result.ok) {
+            return interaction.reply({
+                content: `🔴 No se pudieron crear las cuentas.\n${result.error}`,
+                ephemeral: true,
+            });
+        }
+
+        const summary = result.created
+            .map(item => `• **${item.login}** (${item.nickname})`)
+            .join('\n');
+
+        await interaction.reply({
+            content: `✅ Cuentas creadas.:\n${summary}`,
             ephemeral: true,
         });
+
+        await refreshAccountsPanel(interaction, ctx);
+        return undefined;
+    } catch (error) {
+        console.error('Error in account create step 2 modal:', error);
+        return replyWithError(
+            interaction,
+            '🔴 Algo falló al crear las cuentas. Intenta de nuevo o avisa al Staff.',
+            error
+        );
     }
-
-    const secretQuestion = normalizeInput(interaction.fields.getTextInputValue(INPUTS.SECRET_Q));
-    const secretAnswer = normalizeInput(interaction.fields.getTextInputValue(INPUTS.SECRET_A));
-
-    if (!secretQuestion || !secretAnswer) {
-        return interaction.reply({
-            content: '🔴 Debes completar la pregunta y respuesta secreta.',
-            ephemeral: true,
-        });
-    }
-
-    const draft = await loadDraft(pool, interaction.user.id);
-    await deleteDraft(pool, interaction.user.id);
-
-    if (!draft) {
-        return interaction.reply({
-            content: '🟡 El formulario expiró. Intenta nuevamente.',
-            ephemeral: true,
-        });
-    }
-
-    const payload = {
-        ...draft,
-        secretQuestion,
-        secretAnswer,
-    };
-
-    const result = await createAccounts(pool, interaction.user.id, payload);
-
-    if (!result.ok) {
-        return interaction.reply({
-            content: `🔴 No se pudieron crear las cuentas.\n${result.error}`,
-            ephemeral: true,
-        });
-    }
-
-    const summary = result.created
-        .map(item => `• **${item.login}** (${item.nickname})`)
-        .join('\n');
-
-    await interaction.reply({
-        content: `✅ Cuentas creadas.:\n${summary}`,
-        ephemeral: true,
-    });
-
-    await refreshAccountsPanel(interaction, ctx);
-    return undefined;
 }
 
 async function handleAccountsModal(interaction, ctx) {
