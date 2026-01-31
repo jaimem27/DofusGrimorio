@@ -79,7 +79,7 @@ async function bootstrap() {
                 ctx.accountsPanelChannelId = interaction.channelId;
                 return;
             }
-
+            
             if (interaction.isButton() && interaction.customId.startsWith('dg:install:')) {
                 return handleInstallButton(interaction, ctx);
             }
@@ -92,7 +92,7 @@ async function bootstrap() {
                 return handleInstallModal(interaction, ctx);
             }
 
-            if (interaction.isModalSubmit() && interaction.customId.startsWith('acc:')) {
+            if (interaction.isModalSubmit() && interaction.customId.startsWith('acc.modal:')) {
                 return handleAccountsModal(interaction, ctx);
             }
 

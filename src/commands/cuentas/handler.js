@@ -411,8 +411,20 @@ async function createAccounts(pool, discordUserId, payload) {
             const login = logins[i];
             const nickname = nicknames[i];
             const [result] = await conn.query(
-                `INSERT INTO accounts (Login, passwordHash, Nickname, Email, SecretQuestion, SecretAnswer)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO accounts (
+                    Login,
+                    PasswordHash,
+                    Nickname,
+                    Email,
+                    SecretQuestion,
+                    SecretAnswer,
+                    Lang,
+                    IsJailed,
+                    IsBanned,
+                    Tokens,
+                    NewTokens
+                )
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     login,
                     passwordHash,
@@ -420,6 +432,11 @@ async function createAccounts(pool, discordUserId, payload) {
                     email || null,
                     secretQuestion,
                     secretAnswer,
+                    'es',
+                    0,
+                    0,
+                    0,
+                    0,
                 ]
             );
 
@@ -579,7 +596,7 @@ async function handlePasswordModal(interaction, ctx) {
 
     const passwordHash = crypto.createHash('sha256').update(newPassword, 'utf8').digest('hex');
 
-    await pool.query('UPDATE accounts SET passwordHash = ? WHERE Id = ?', [passwordHash, accountId]);
+    await pool.query('UPDATE accounts SET PasswordHash = ? WHERE Id = ?', [passwordHash, accountId]);
 
     await interaction.reply({
         content: `✅ Contraseña actualizada para **${account.Login}**.`,
