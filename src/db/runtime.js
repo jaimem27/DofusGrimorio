@@ -1,5 +1,5 @@
 const { createPool } = require('mysql2/promise');
-const { runMigrations } = require('./migrate.js');
+const { runMigrations, runAuthMigrations } = require('./migrate.js');
 const cfg = require('./config.js');
 
 function createMemoryConfigStore() {
@@ -149,6 +149,11 @@ function createRuntimeDb() {
 
             pools[kind] = buildPool(nextConfig);
             poolConfigs[kind] = nextConfig;
+
+            if (kind === 'auth') {
+                await runAuthMigrations(pools[kind]);
+            }
+
             return pools[kind];
         },
     };
