@@ -40,13 +40,15 @@ function buildProfileView({
     tokens,
     breedName,
 }) {
-    const xpRemainingLine =
-        xpRemaining !== null
-            ? `**XP para siguiente nivel:** ${fmtInt(xpRemaining)}`
-            : '**XP para siguiente nivel:** —';
     const tokensLine = tokens !== null ? fmtInt(tokens) : '—';
     const xpPercentLine =
         xpPercent !== null ? `${xpPercent.toFixed(1)}%` : '—';
+    const xpRemainingLine =
+        xpRemaining !== null ? `${fmtInt(xpRemaining)} restantes` : '—';
+    const xpLine =
+        xpPercent !== null || xpRemaining !== null
+            ? `**XP:** ${xpPercentLine} (${xpRemainingLine})`
+            : '**XP:** —';
 
     const thumbnail = resolveBreedThumbnail(Number(character.Breed));
     const embed = new EmbedBuilder()
@@ -64,7 +66,7 @@ function buildProfileView({
                 name: '❤️ Estado',
                 value:
                     `**Vida:** ${fmtInt(hpNow)} / ${fmtInt(hpMax)}\n` +
-                    `**PA/PM:** ${character.AP} / ${character.MP}\n` +
+                    `**PA:** ${character.AP} · **PM:** ${character.MP}\n` +
                     `**Energía:** ${character.Energy} / ${character.EnergyMax}`,
                 inline: true,
             },
@@ -73,8 +75,7 @@ function buildProfileView({
                 value:
                     `**Kamas:** ${fmtInt(character.Kamas)}\n` +
                     `**Ogrinas:** ${tokensLine}\n` +
-                    `**XP actual:** ${xpPercentLine}\n` +
-                    `${xpRemainingLine}`,
+                    `${xpLine}`,
                 inline: true,
             },
             {
@@ -91,8 +92,7 @@ function buildProfileView({
                     `**Creación:** ${fmtDate(character.CreationDate)}`,
                 inline: true,
             }
-        )
-        .setFooter({ text: `Id: ${character.Id} • Cuenta: ${character.AccountId ?? '—'}` });
+        );
 
     if (thumbnail) {
         embed.setThumbnail(`attachment://${thumbnail.name}`);
