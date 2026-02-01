@@ -52,7 +52,7 @@ async function bootstrap() {
             if (logError) logError(err, 'No se pudo cargar la configuración guardada de BD.');
         }
     }
-    
+
     client.on('interactionCreate', async (interaction) => {
         try {
             const { buildInstallView } = require('./commands/instalar/ui.js');
@@ -94,6 +94,11 @@ async function bootstrap() {
                 ctx.accountsPanelId = msg.id;
                 ctx.accountsPanelChannelId = interaction.channelId;
                 return;
+            }
+
+            if (interaction.isChatInputCommand() && interaction.commandName === 'perfil') {
+                const perfil = require('./commands/perfil.js');
+                return perfil.execute(interaction, ctx);
             }
 
             if (interaction.isButton() && interaction.customId.startsWith('dg:install:')) {
