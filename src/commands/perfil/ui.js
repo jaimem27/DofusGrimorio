@@ -39,6 +39,7 @@ function buildProfileView({
     subareaName,
     tokens,
     breedName,
+    equipmentSummary,
 }) {
     const tokensLine = tokens !== null ? fmtInt(tokens) : '—';
     const xpPercentLine =
@@ -52,7 +53,7 @@ function buildProfileView({
 
     const thumbnail = resolveBreedThumbnail(Number(character.Breed));
     const embed = new EmbedBuilder()
-        .setTitle(`👤 Perfil — ${character.Name} (Nv. ${level})`)
+        .setTitle(`👤 ${character.Name} (Nv. ${level})`)
         .setColor(0x2f3136)
         .addFields(
             {
@@ -93,6 +94,14 @@ function buildProfileView({
                 inline: true,
             }
         );
+
+    if (equipmentSummary) {
+        embed.addFields({
+            name: '🎒 Equipamiento',
+            value: equipmentSummary,
+            inline: false,
+        });
+    }
 
     if (thumbnail) {
         embed.setThumbnail(`attachment://${thumbnail.name}`);

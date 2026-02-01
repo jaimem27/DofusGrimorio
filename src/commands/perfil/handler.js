@@ -1,9 +1,44 @@
 const { buildProfileView } = require('./ui.js');
 const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { deserializeEffects } = require('../../utils/objectEffectsSerializer.js');
 
 const SELECTS = {
     ACCOUNT: 'perfil.sel:account',
     CHARACTER: 'perfil.sel:character',
+};
+
+const EQUIPMENT_SLOTS = {
+    0: 'Amuleto',
+    1: 'Arma',
+    2: 'Anillo (izq.)',
+    3: 'Cinturón',
+    4: 'Anillo (der.)',
+    5: 'Botas',
+    6: 'Sombrero',
+    7: 'Capa',
+    8: 'Mascota',
+    9: 'Dofus 1',
+    10: 'Dofus 2',
+    11: 'Dofus 3',
+    12: 'Dofus 4',
+    13: 'Dofus 5',
+    14: 'Dofus 6',
+    15: 'Escudo',
+    16: 'Montura',
+    17: 'Compañero',
+    18: 'Mascota viva',
+    19: 'Consumible rápido 1',
+    20: 'Consumible rápido 2',
+    21: 'Consumible rápido 3',
+    22: 'Consumible rápido 4',
+    23: 'Consumible rápido 5',
+    24: 'Consumible rápido 6',
+    25: 'Consumible rápido 7',
+    26: 'Consumible rápido 8',
+    27: 'Consumible rápido 9',
+    28: 'Consumible rápido 10',
+    29: 'Aura',
+    30: 'Emote',
 };
 
 async function fetchNextLevelExp(pool, level) {
@@ -45,6 +80,89 @@ async function fetchAccountTokens(pool, accountId) {
         [accountId]
     );
     return rows?.[0]?.Tokens ?? null;
+}
+
+async function loadEquippedItems(pool, characterId) {
+    const [rows] = await pool.query(
+        `
+        SELECT ItemId, Position, SerializedEffects
+        FROM characters_items
+        WHERE OwnerId = ?
+          AND Position >= 0
+        ORDER BY Position ASC;
+        `,
+        [characterId]
+    );
+    return rows ?? [];
+}
+
+function parseSerializedEffects(buffer) {
+    if (!buffer) return [];
+    try {
+        return deserializeEffects(buffer);
+    } catch (error) {
+        return [
+            {
+                type: 'ParseError',
+                message: error instanceof Error ? error.message : 'Error desconocido',
+            },
+        ];
+    }
+}
+
+function formatEffect(effect) {
+    if (effect.type === 'ParseError') {
+        return `⚠️ ${effect.message}`;
+    }
+    if (effect.full === false) {
+        return `Efecto ${effect.id}`;
+    }
+    switch (effect.type) {
+        case 'EffectInteger':
+            return `Id ${effect.id}: ${effect.value}`;
+        case 'EffectDice':
+            return `Id ${effect.id}: ${effect.value} (${effect.diceNum}d${effect.diceFace})`;
+        case 'EffectMinMax':
+            return `Id ${effect.id}: ${effect.min}-${effect.max}`;
+        case 'EffectString':
+            return `Id ${effect.id}: ${effect.text}`;
+        case 'EffectDate':
+            return `Id ${effect.id}: ${effect.year}-${effect.month}-${effect.day} ${effect.hour}:${effect.minute}`;
+        case 'EffectDuration':
+            return `Id ${effect.id}: ${effect.days}d ${effect.hours}h ${effect.minutes}m`;
+        case 'EffectCreature':
+            return `Id ${effect.id}: Familia ${effect.monsterFamily}`;
+        case 'EffectLadder':
+            return `Id ${effect.id}: Familia ${effect.monsterFamily} (${effect.monsterCount})`;
+        case 'EffectMount':
+            return `Id ${effect.id}: Montura ${effect.mount?.name ?? '—'} (Nv ${effect.mount?.level ?? 0})`;
+        default:
+            return `Id ${effect.id}: ${effect.type}`;
+    }
+}
+
+function summarizeItemEffects(effects, limit = 6) {
+    if (!effects.length) return 'Sin efectos';
+    const lines = effects.slice(0, limit).map(formatEffect);
+    if (effects.length > limit) {
+        lines.push(`… +${effects.length - limit} más`);
+    }
+    return lines.join(' · ');
+}
+
+function buildEquipmentSummary(items) {
+    if (!items.length) return 'Sin equipamiento.';
+    const lines = items.map(item => {
+        const slot = EQUIPMENT_SLOTS[item.Position] ?? `Pos ${item.Position}`;
+        const effects = parseSerializedEffects(item.SerializedEffects);
+        const effectsSummary = summarizeItemEffects(effects);
+        return `**${slot}** · Obj ${item.ItemId} · ${effectsSummary}`;
+    });
+    const summary = lines.join('\n');
+    if (summary.length <= 1024) {
+        return summary;
+    }
+    return `${summary.slice(0, 1000)}\n…`;
 }
 
 async function loadLinkedAccounts(pool, discordUserId) {
@@ -171,12 +289,14 @@ async function buildProfileData(ctx, worldPool, character) {
             ? ((xpCurrent - Number(currentExpLevel)) / (Number(nextExp) - Number(currentExpLevel))) * 100
             : null;
     const xpPercent = clampPercent(xpPercentRaw);
-    const [subareaName, breedName] = await Promise.all([
+    const [subareaName, breedName, equippedItems] = await Promise.all([
         fetchSubareaName(worldPool, character.MapId),
         fetchBreedName(worldPool, character.Breed),
+        loadEquippedItems(worldPool, character.Id),
     ]);
     const authPool = await ctx.db.getPool('auth');
     const tokens = await fetchAccountTokens(authPool, character.AccountId);
+    const equipmentSummary = buildEquipmentSummary(equippedItems);
 
     return buildProfileView({
         character,
@@ -188,6 +308,7 @@ async function buildProfileData(ctx, worldPool, character) {
         subareaName,
         tokens,
         breedName,
+        equipmentSummary,
     });
 }
 
@@ -234,7 +355,7 @@ async function handlePerfilCommand(interaction, ctx) {
         });
     }
 
-    await interaction.deferReply({  });
+    await interaction.deferReply({});
 
     const character = await loadCharacterByName(worldPool, nombre);
     if (!character) {
