@@ -7,6 +7,7 @@ const { createRuntimeDb } = require('./db/runtime.js');
 const { loadBootstrapConfig } = require('./db/bootstrap.js');
 const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
 const { handleAccountsButton, handleAccountsModal, handleAccountsSelect } = require('./commands/cuentas/handler.js');
+const { handlePerfilSelect } = require('./commands/perfil/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
 
 
@@ -119,6 +120,10 @@ async function bootstrap() {
 
             if (interaction.isStringSelectMenu() && interaction.customId.startsWith('acc')) {
                 return handleAccountsSelect(interaction, ctx);
+            }
+
+            if (interaction.isStringSelectMenu() && interaction.customId.startsWith('perfil')) {
+                return handlePerfilSelect(interaction, ctx);
             }
 
         } catch (err) {

@@ -34,31 +34,30 @@ function buildProfileView({
     level,
     hpNow,
     hpMax,
-    xpCurrent,
+    xpPercent,
     xpRemaining,
     subareaName,
     tokens,
     breedName,
 }) {
-    const accountLine = character.AccountId ? `**Cuenta:** ${character.AccountId}\n` : '';
     const xpRemainingLine =
         xpRemaining !== null
             ? `**XP para siguiente nivel:** ${fmtInt(xpRemaining)}`
             : '**XP para siguiente nivel:** —';
     const tokensLine = tokens !== null ? fmtInt(tokens) : '—';
+    const xpPercentLine =
+        xpPercent !== null ? `${xpPercent.toFixed(1)}%` : '—';
 
     const thumbnail = resolveBreedThumbnail(Number(character.Breed));
     const embed = new EmbedBuilder()
         .setTitle(`👤 Perfil — ${character.Name} (Nv. ${level})`)
-        .setDescription('⋯ ⌁ ✦ ◈ ✦ ⌁ ⋯')
         .setColor(0x2f3136)
         .addFields(
             {
-                name: '🪪 Identidad',
+                name: '🪪 Clase',
                 value:
                     `**Clase:** ${breedName ?? `Breed ${character.Breed}`}\n` +
-                    `**Sexo:** ${sexName(Number(character.Sex))}\n` +
-                    accountLine,
+                    `**Sexo:** ${sexName(Number(character.Sex))}`,
                 inline: true,
             },
             {
@@ -74,7 +73,7 @@ function buildProfileView({
                 value:
                     `**Kamas:** ${fmtInt(character.Kamas)}\n` +
                     `**Ogrinas:** ${tokensLine}\n` +
-                    `**XP actual:** ${fmtInt(xpCurrent)}\n` +
+                    `**XP actual:** ${xpPercentLine}\n` +
                     `${xpRemainingLine}`,
                 inline: true,
             },
