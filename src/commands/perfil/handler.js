@@ -1,10 +1,16 @@
-const { buildProfileView } = require('./ui.js');
-const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { buildProfileView, buildStatsView, buildEquipmentView, buildStatsBlock } = require('./ui.js');
+const {
+    ActionRowBuilder,
+    StringSelectMenuBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+} = require('discord.js');
 const { deserializeEffects } = require('../../utils/objectEffectsSerializer.js');
 
-const SELECTS = {
-    ACCOUNT: 'perfil.sel:account',
-    CHARACTER: 'perfil.sel:character',
+const PROFILE_TABS = {
+    SUMMARY: 'summary',
+    STATS: 'stats',
+    EQUIPMENT: 'equipment',
 };
 
 const EQUIPMENT_SLOTS = {
@@ -27,18 +33,6 @@ const EQUIPMENT_SLOTS = {
     16: 'Montura',
     17: 'Compañero',
     18: 'Mascota viva',
-    19: 'Consumible rápido 1',
-    20: 'Consumible rápido 2',
-    21: 'Consumible rápido 3',
-    22: 'Consumible rápido 4',
-    23: 'Consumible rápido 5',
-    24: 'Consumible rápido 6',
-    25: 'Consumible rápido 7',
-    26: 'Consumible rápido 8',
-    27: 'Consumible rápido 9',
-    28: 'Consumible rápido 10',
-    29: 'Aura',
-    30: 'Emote',
 };
 
 async function fetchNextLevelExp(pool, level) {
@@ -85,10 +79,18 @@ async function fetchAccountTokens(pool, accountId) {
 async function loadEquippedItems(pool, characterId) {
     const [rows] = await pool.query(
         `
-        SELECT ItemId, Position, SerializedEffects
-        FROM characters_items
-        WHERE OwnerId = ?
-          AND Position >= 0
+        SELECT
+          ci.ItemId,
+          ci.Position,
+          ci.SerializedEffects,
+          COALESCE(w.Name, t.Name) AS ItemName,
+          COALESCE(w.Level, t.Level) AS ItemLevel,
+          COALESCE(w.IconId, t.IconId) AS IconId
+          FROM characters_items
+          LEFT JOIN items_templates t ON t.Id = ci.ItemId
+          LEFT JOIN items_templates_weapons w ON w.Id = ci.ItemId
+          WHERE ci.OwnerId = ?
+          AND ci.Position >= 0
         ORDER BY Position ASC;
         `,
         [characterId]
@@ -114,31 +116,16 @@ function formatEffect(effect) {
     if (effect.type === 'ParseError') {
         return `⚠️ ${effect.message}`;
     }
+    if (effect.display) {
+        return effect.display;
+    }
     if (effect.full === false) {
-        return `Efecto ${effect.id}`;
+        return effect.label ?? effect.type ?? `Efecto ${effect.id}`;
     }
-    switch (effect.type) {
-        case 'EffectInteger':
-            return `Id ${effect.id}: ${effect.value}`;
-        case 'EffectDice':
-            return `Id ${effect.id}: ${effect.value} (${effect.diceNum}d${effect.diceFace})`;
-        case 'EffectMinMax':
-            return `Id ${effect.id}: ${effect.min}-${effect.max}`;
-        case 'EffectString':
-            return `Id ${effect.id}: ${effect.text}`;
-        case 'EffectDate':
-            return `Id ${effect.id}: ${effect.year}-${effect.month}-${effect.day} ${effect.hour}:${effect.minute}`;
-        case 'EffectDuration':
-            return `Id ${effect.id}: ${effect.days}d ${effect.hours}h ${effect.minutes}m`;
-        case 'EffectCreature':
-            return `Id ${effect.id}: Familia ${effect.monsterFamily}`;
-        case 'EffectLadder':
-            return `Id ${effect.id}: Familia ${effect.monsterFamily} (${effect.monsterCount})`;
-        case 'EffectMount':
-            return `Id ${effect.id}: Montura ${effect.mount?.name ?? '—'} (Nv ${effect.mount?.level ?? 0})`;
-        default:
-            return `Id ${effect.id}: ${effect.type}`;
+    if (effect.label) {
+        return effect.label;
     }
+    return effect.type ?? `Efecto ${effect.id}`;
 }
 
 function summarizeItemEffects(effects, limit = 6) {
@@ -150,15 +137,56 @@ function summarizeItemEffects(effects, limit = 6) {
     return lines.join(' · ');
 }
 
+function formatItemName(item) {
+    return item.ItemName?.trim() || `Obj ${item.ItemId}`;
+}
+
+function formatItemLevel(item) {
+    if (Number.isFinite(Number(item.ItemLevel))) {
+        return `Nv. ${item.ItemLevel}`;
+    }
+    return 'Nv. —';
+}
+
 function buildEquipmentSummary(items) {
     if (!items.length) return 'Sin equipamiento.';
     const lines = items.map(item => {
         const slot = EQUIPMENT_SLOTS[item.Position] ?? `Pos ${item.Position}`;
         const effects = parseSerializedEffects(item.SerializedEffects);
         const effectsSummary = summarizeItemEffects(effects);
-        return `**${slot}** · Obj ${item.ItemId} · ${effectsSummary}`;
+        const name = formatItemName(item);
+        const level = formatItemLevel(item);
+        return `**${slot}** · ${name} (${level}) · ${effectsSummary}`;
     });
     const summary = lines.join('\n');
+    if (summary.length <= 1024) {
+        return summary;
+    }
+    return `${summary.slice(0, 1000)}\n…`;
+}
+
+function buildEquipmentPreview(items, limit = 2) {
+    if (!items.length) return 'Sin equipamiento.';
+    const lines = items.slice(0, limit).map(item => {
+        const slot = EQUIPMENT_SLOTS[item.Position] ?? `Pos ${item.Position}`;
+        const effects = parseSerializedEffects(item.SerializedEffects);
+        const effectsSummary = summarizeItemEffects(effects);
+        return `**${slot}** · Obj ${item.ItemId}\n${effectsSummary}`;
+    });
+    return lines.join('\n\n');
+}
+
+function buildEquipmentDetails(items) {
+    if (!items.length) return 'Sin equipamiento.';
+    const lines = items.map(item => {
+        const slot = EQUIPMENT_SLOTS[item.Position] ?? `Pos ${item.Position}`;
+        const effects = parseSerializedEffects(item.SerializedEffects);
+        const effectsSummary = summarizeItemEffects(effects, 8);
+        const name = formatItemName(item);
+        const level = formatItemLevel(item);
+        return `**${slot}** · ${name} (${level})\n${effectsSummary}`;
+    });
+    const summary = lines.join('\n\n');
     if (summary.length <= 1024) {
         return summary;
     }
@@ -202,6 +230,10 @@ async function loadCharacterByName(pool, name) {
           c.MapId, c.CellId, c.Direction,
           c.BaseHealth, c.DamageTaken,
           c.AP, c.MP,
+          c.Strength, c.Intelligence, c.Chance, c.Agility, c.Vitality, c.Wisdom,
+          c.PermanentAddedStrength, c.PermanentAddedIntelligence, c.PermanentAddedChance,
+          c.PermanentAddedAgility, c.PermanentAddedVitality, c.PermanentAddedWisdom,
+          c.Prospection,
           c.Energy, c.EnergyMax,
           c.Kamas, c.Experience,
           c.CreationDate, c.LastUsage,
@@ -228,6 +260,10 @@ async function loadCharacterById(pool, charId) {
           c.MapId, c.CellId, c.Direction,
           c.BaseHealth, c.DamageTaken,
           c.AP, c.MP,
+          c.Strength, c.Intelligence, c.Chance, c.Agility, c.Vitality, c.Wisdom,
+          c.PermanentAddedStrength, c.PermanentAddedIntelligence, c.PermanentAddedChance,
+          c.PermanentAddedAgility, c.PermanentAddedVitality, c.PermanentAddedWisdom,
+          c.Prospection,
           c.Energy, c.EnergyMax,
           c.Kamas, c.Experience,
           c.CreationDate, c.LastUsage,
@@ -264,12 +300,43 @@ function buildCharacterSelect(accountId, options) {
     return new ActionRowBuilder().addComponents(select);
 }
 
+function buildProfileButtons(characterId, activeTab) {
+    const buttons = [
+        {
+            id: PROFILE_TABS.SUMMARY,
+            label: 'Resumen',
+        },
+        {
+            id: PROFILE_TABS.STATS,
+            label: 'Stats',
+        },
+        {
+            id: PROFILE_TABS.EQUIPMENT,
+            label: 'Equipamiento',
+        },
+    ];
+
+    const row = new ActionRowBuilder();
+
+    buttons.forEach((button) => {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`perfil.tab:${button.id}:${characterId}`)
+                .setLabel(button.label)
+                .setStyle(button.id === activeTab ? ButtonStyle.Primary : ButtonStyle.Secondary)
+                .setDisabled(button.id === activeTab)
+        );
+    });
+
+    return row;
+}
+
 function clampPercent(value) {
     if (!Number.isFinite(value)) return null;
     return Math.min(100, Math.max(0, value));
 }
 
-async function buildProfileData(ctx, worldPool, character) {
+async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SUMMARY) {
     const level = Number(character.Level ?? 1);
     const hpMax = Math.max(0, Number(character.BaseHealth ?? 0));
     const dmg = Math.max(0, Number(character.DamageTaken ?? 0));
@@ -297,6 +364,7 @@ async function buildProfileData(ctx, worldPool, character) {
     const authPool = await ctx.db.getPool('auth');
     const tokens = await fetchAccountTokens(authPool, character.AccountId);
     const equipmentSummary = buildEquipmentSummary(equippedItems);
+    const equipmentDetails = buildEquipmentDetails(equippedItems);
 
     return buildProfileView({
         character,
@@ -309,6 +377,8 @@ async function buildProfileData(ctx, worldPool, character) {
         tokens,
         breedName,
         equipmentSummary,
+        equipmentDetails,
+        tab,
     });
 }
 
@@ -365,9 +435,13 @@ async function handlePerfilCommand(interaction, ctx) {
         return;
     }
 
-    const view = await buildProfileData(ctx, worldPool, character);
+    const view = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
+    const buttons = buildProfileButtons(character.Id, PROFILE_TABS.SUMMARY);
 
-    await interaction.editReply(view);
+    await interaction.editReply({
+        ...view,
+        components: [buttons],
+    });
 }
 
 async function handlePerfilAccountSelect(interaction, ctx) {
@@ -472,10 +546,68 @@ async function handlePerfilCharacterSelect(interaction, ctx) {
         });
     }
 
-    const view = await buildProfileData(ctx, worldPool, character);
+    const view = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
+    const buttons = buildProfileButtons(character.Id, PROFILE_TABS.SUMMARY);
 
     return interaction.editReply({
         ...view,
+        components: [buttons],
+    });
+}
+
+async function handlePerfilButton(interaction, ctx) {
+    await interaction.deferUpdate();
+
+    const worldPool = await ctx.db.getPool('world');
+    if (!worldPool) {
+        return interaction.editReply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+            components: [],
+        });
+    }
+
+    const parts = interaction.customId.split(':');
+    const action = parts[1];
+    const charId = Number.parseInt(parts[2], 10);
+
+    if (!action || !Number.isFinite(charId)) {
+        return interaction.editReply({
+            content: '🔴 Acción inválida.',
+            components: [],
+        });
+    }
+
+    const character = await loadCharacterById(worldPool, charId);
+    if (!character) {
+        return interaction.editReply({
+            content: '🔴 No encontré el personaje.',
+            components: [],
+        });
+    }
+
+    if (action === 'stats') {
+        const statsBlock = buildStatsBlock(character);
+        const view = buildStatsView({
+            character,
+            level: Number(character.Level ?? 1),
+            statsBlock,
+        });
+        return interaction.editReply(view);
+    }
+
+    if (action === 'equip') {
+        const equippedItems = await loadEquippedItems(worldPool, character.Id);
+        const equipmentLines = buildEquipmentPreview(equippedItems, 2);
+        const view = buildEquipmentView({
+            character,
+            level: Number(character.Level ?? 1),
+            equipmentLines,
+        });
+        return interaction.editReply(view);
+    }
+
+    return interaction.editReply({
+        content: '🔴 Acción no reconocida.',
         components: [],
     });
 }
@@ -493,4 +625,43 @@ async function handlePerfilSelect(interaction, ctx) {
     });
 }
 
-module.exports = { handlePerfilCommand, handlePerfilSelect };
+async function handlePerfilTabButton(interaction, ctx) {
+    await interaction.deferUpdate();
+
+    const parts = interaction.customId.split(':');
+    const tab = parts[1];
+    const charId = Number.parseInt(parts[2], 10);
+
+    if (!Object.values(PROFILE_TABS).includes(tab) || !Number.isFinite(charId)) {
+        return interaction.editReply({
+            content: '🔴 Acción no reconocida.',
+            components: [],
+        });
+    }
+
+    const worldPool = await ctx.db.getPool('world');
+    if (!worldPool) {
+        return interaction.editReply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+            components: [],
+        });
+    }
+
+    const character = await loadCharacterById(worldPool, charId);
+    if (!character) {
+        return interaction.editReply({
+            content: '🔴 Personaje no encontrado.',
+            components: [],
+        });
+    }
+
+    const view = await buildProfileData(ctx, worldPool, character, tab);
+    const buttons = buildProfileButtons(character.Id, tab);
+
+    return interaction.editReply({
+        ...view,
+        components: [buttons],
+    });
+}
+
+module.exports = { handlePerfilCommand, handlePerfilSelect, handlePerfilTabButton };

@@ -7,7 +7,7 @@ const { createRuntimeDb } = require('./db/runtime.js');
 const { loadBootstrapConfig } = require('./db/bootstrap.js');
 const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
 const { handleAccountsButton, handleAccountsModal, handleAccountsSelect } = require('./commands/cuentas/handler.js');
-const { handlePerfilSelect } = require('./commands/perfil/handler.js');
+const { handlePerfilSelect, handlePerfilTabButton } = require('./commands/perfil/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
 
 
@@ -110,6 +110,10 @@ async function bootstrap() {
                 return handleAccountsButton(interaction, ctx);
             }
 
+            if (interaction.isButton() && interaction.customId.startsWith('perfil.btn:')) {
+                return handlePerfilButton(interaction, ctx);
+            }
+
             if (interaction.isModalSubmit() && interaction.customId.startsWith('dg:modal:')) {
                 return handleInstallModal(interaction, ctx);
             }
@@ -124,6 +128,10 @@ async function bootstrap() {
 
             if (interaction.isStringSelectMenu() && interaction.customId.startsWith('perfil')) {
                 return handlePerfilSelect(interaction, ctx);
+            }
+
+            if (interaction.isButton() && interaction.customId.startsWith('perfil.tab:')) {
+                return handlePerfilTabButton(interaction, ctx);
             }
 
         } catch (err) {

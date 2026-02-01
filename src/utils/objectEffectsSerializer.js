@@ -113,6 +113,106 @@ const EFFECT_TYPES = {
     10: 'EffectString',
 };
 
+const EFFECT_LABELS = {
+    78: 'PM',
+    110: 'Vitalidad',
+    111: 'PA',
+    112: 'Daños',
+    115: 'Golpes críticos',
+    117: 'Alcance',
+    118: 'Fuerza',
+    119: 'Agilidad',
+    123: 'Suerte',
+    124: 'Sabiduría',
+    125: 'Vitalidad',
+    126: 'Inteligencia',
+    136: 'Alcance',
+    160: 'Esquiva PA',
+    161: 'Esquiva PM',
+    165: 'Daños (%)',
+    174: 'Iniciativa',
+    176: 'Prospección',
+    178: 'Curaciones',
+    182: 'Invocaciones',
+    210: 'Resistencia Tierra (%)',
+    211: 'Resistencia Agua (%)',
+    212: 'Resistencia Aire (%)',
+    213: 'Resistencia Fuego (%)',
+    214: 'Resistencia Neutro (%)',
+    225: 'Daños de trampa',
+    226: 'Daños de trampa (%)',
+    240: 'Reducción Tierra',
+    241: 'Reducción Agua',
+    242: 'Reducción Aire',
+    243: 'Reducción Fuego',
+    244: 'Reducción Neutro',
+    410: 'PM',
+    412: 'PA',
+};
+
+function formatSigned(value) {
+    if (value > 0) {
+        return `+${value}`;
+    }
+    if (value < 0) {
+        return `${value}`;
+    }
+    return '0';
+}
+
+function formatRange(min, max) {
+    if (min === max) {
+        return formatSigned(min);
+    }
+    return `${formatSigned(min)} a ${formatSigned(max)}`;
+}
+
+function formatDateParts(year, month, day, hour, minute) {
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}`;
+}
+
+function decorateEffect(effect) {
+    const label = EFFECT_LABELS[effect.id] ?? effect.type;
+    const withLabel = { ...effect, label };
+
+    switch (effect.serializationId) {
+        case 3:
+            withLabel.display = `${label} ${formatDateParts(effect.year, effect.month, effect.day, effect.hour, effect.minute)}`;
+            break;
+        case 4: {
+            const min = Math.min(effect.diceNum, effect.diceFace);
+            const max = Math.max(effect.diceNum, effect.diceFace);
+            if (min === 0 && max === 0) {
+                withLabel.display = `${label} ${formatSigned(effect.value)}`;
+            } else {
+                withLabel.display = `${label} ${formatRange(min, max)}`;
+            }
+            break;
+        }
+        case 5:
+            withLabel.display = `${label} ${effect.days}d ${effect.hours}h ${effect.minutes}m`;
+            break;
+        case 6:
+            withLabel.display = `${label} ${formatSigned(effect.value)}`;
+            break;
+        case 8:
+            withLabel.display = `${label} ${formatRange(effect.min, effect.max)}`;
+            break;
+        case 10:
+            withLabel.display = `${label} ${effect.text}`;
+            break;
+        default:
+            if (typeof effect.value === 'number') {
+                withLabel.display = `${label} ${formatSigned(effect.value)}`;
+            } else {
+                withLabel.display = label;
+            }
+    }
+
+    return withLabel;
+}
+
 function readBaseEffect(reader) {
     const header = reader.readChar();
     if (header === 'C') {
@@ -233,7 +333,7 @@ function deserializeEffects(buffer) {
     const reader = new DotNetBinaryReader(buffer);
     const effects = [];
     while (reader.offset < reader.buffer.length) {
-        effects.push(readEffect(reader));
+        effects.push(decorateEffect(readEffect(reader)));
     }
     return effects;
 }
