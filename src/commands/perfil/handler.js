@@ -20,6 +20,7 @@ const SELECTS = {
     ACCOUNT: 'perfil:select:account',
     CHARACTER: 'perfil:select:character',
     EQUIPMENT: 'perfil:select:equip',
+    JOBS: 'jobs',
 };
 
 const EQUIPMENT_SLOTS = {
@@ -32,12 +33,12 @@ const EQUIPMENT_SLOTS = {
     6: 'Sombrero',
     7: 'Capa',
     8: 'Mascota',
-    9: 'Dofus 1',
-    10: 'Dofus 2',
-    11: 'Dofus 3',
-    12: 'Dofus 4',
-    13: 'Dofus 5',
-    14: 'Dofus 6',
+    9: 'Dofus/Trofeo',
+    10: 'Dofus/Trofeo',
+    11: 'Dofus/Trofeo',
+    12: 'Dofus/Trofeo',
+    13: 'Dofus/Trofeo',
+    14: 'Dofus/Trofeo',
     15: 'Escudo',
     16: 'Montura',
     17: 'Compañero',
@@ -526,7 +527,7 @@ async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SU
         tab === PROFILE_TABS.STATS ? await fetchAlignmentLevel(worldPool, character.Honor) : null;
     const statsBlock =
         tab === PROFILE_TABS.STATS ? buildStatsBlock(character, alignmentLevel) : null;
-        const jobs =
+    const jobs =
         tab === PROFILE_TABS.JOBS ? await loadCharacterJobs(worldPool, character.Id) : null;
     const jobsLines = jobs ? buildJobsLines(jobs) : null;
 
@@ -803,6 +804,15 @@ async function handlePerfilButton(interaction, ctx) {
             components: [...(extraComponents ?? []), buttons],
         });
 
+    }
+
+    if (action === 'jobs') {
+        const { view } = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.JOBS);
+        const buttons = buildProfileButtons(character.Id, PROFILE_TABS.JOBS);
+        return interaction.editReply({
+            ...view,
+            components: [buttons],
+        });
     }
 
     return interaction.editReply({
