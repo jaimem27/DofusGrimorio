@@ -168,7 +168,6 @@ function buildProfileView({
         embed
             .setTitle(`🎒 Equipamiento de ${character.Name} (Nv. ${level})`)
             .addFields({
-                name: '🧰 Objetos equipados',
                 value: equipmentDetails || 'Sin equipamiento.',
                 inline: false,
             });
@@ -241,15 +240,44 @@ function buildStatsView({ character, level, statsBlock }) {
     };
 }
 
-function buildEquipmentView({ character, level, equipmentLines }) {
+function buildEquipmentView({ character, level, equipmentLines, equipmentImage, components = [] }) {
     const embed = new EmbedBuilder()
         .setTitle(`${character.Name} (Nv. ${level})`)
         .setColor(0x2f3136)
-        .setDescription(`🎒**Equipamiento:**\n${equipmentLines}`);
+        .setDescription(equipmentLines);
+
+    if (equipmentImage) {
+        embed.setImage(`attachment://${equipmentImage.name}`);
+    }
 
     return {
         embeds: [embed],
-        components: [buildProfileButtons(character.Id)],
+        files: equipmentImage ? [equipmentImage] : [],
+        components: components.length ? components : [buildProfileButtons(character.Id)],
+    };
+}
+
+function buildItemStatsView({ character, item, slotName, effectsLines, iconAttachment, components = [] }) {
+    const description = [
+        `**${slotName}**`,
+        `**Nivel:** ${Number.isFinite(Number(item.ItemLevel)) ? item.ItemLevel : '—'}`,
+        '',
+        (effectsLines?.length ? effectsLines : ['Sin efectos']).join('\n'),
+    ].join('\n');
+
+    const embed = new EmbedBuilder()
+        .setTitle(`📊 ${item.ItemName ?? `Obj ${item.ItemId}`}`)
+        .setColor(0x2f3136)
+        .setDescription(description);
+
+    if (iconAttachment) {
+        embed.setThumbnail(`attachment://${iconAttachment.name}`);
+    }
+
+    return {
+        embeds: [embed],
+        files: iconAttachment ? [iconAttachment] : [],
+        components,
     };
 }
 
@@ -258,4 +286,5 @@ module.exports = {
     buildStatsView,
     buildEquipmentView,
     buildStatsBlock,
+    buildItemStatsView,
 };

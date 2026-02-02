@@ -7,7 +7,7 @@ const { createRuntimeDb } = require('./db/runtime.js');
 const { loadBootstrapConfig } = require('./db/bootstrap.js');
 const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
 const { handleAccountsButton, handleAccountsModal, handleAccountsSelect } = require('./commands/cuentas/handler.js');
-const { handlePerfilSelect, handlePerfilTabButton } = require('./commands/perfil/handler.js');
+const { handlePerfilSelect, handlePerfilTabButton, handlePerfilButton } = require('./commands/perfil/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
 
 

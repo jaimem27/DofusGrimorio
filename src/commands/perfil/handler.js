@@ -1,11 +1,14 @@
-const { buildProfileView, buildStatsView, buildEquipmentView, buildStatsBlock } = require('./ui.js');
+const { buildProfileView, buildStatsView, buildEquipmentView, buildStatsBlock, buildItemStatsView } = require('./ui.js');
 const {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     ButtonBuilder,
     ButtonStyle,
+    AttachmentBuilder,
 } = require('discord.js');
 const { deserializeEffects } = require('../../utils/objectEffectsSerializer.js');
+const { resolveEquipmentBasePath, resolveEquipmentIconPath } = require('../../utils/equipmentAssets.js');
+const { buildEquipmentImage } = require('../../utils/equipmentImage.js');
 
 const PROFILE_TABS = {
     SUMMARY: 'summary',
@@ -16,6 +19,7 @@ const PROFILE_TABS = {
 const SELECTS = {
     ACCOUNT: 'perfil:select:account',
     CHARACTER: 'perfil:select:character',
+    EQUIPMENT: 'perfil:select:equip',
 };
 
 const EQUIPMENT_SLOTS = {
@@ -195,43 +199,105 @@ function buildEquipmentSummary(items) {
     return `${summary.slice(0, 1000)}\n…`;
 }
 
-function formatEquipmentLine(item) {
-    const slot = EQUIPMENT_SLOTS[item.Position] ?? `Pos ${item.Position}`;
-    const name = formatItemName(item);
-    return `**${slot}:** ${name}`;
+function buildEquipmentBySlot(items) {
+    return items.reduce((acc, item) => {
+        const position = Number(item.Position);
+        acc[position] = {
+            itemId: item.ItemId,
+            name: formatItemName(item),
+            level: item.ItemLevel,
+            iconId: item.IconId,
+            effects: parseSerializedEffects(item.SerializedEffects),
+        };
+        return acc;
+    }, {});
 }
 
-function buildEquipmentSlotLines(items, { includeEmpty = false } = {}) {
-    if (!items.length && !includeEmpty) return [];
-    const itemsBySlot = new Map(items.map(item => [Number(item.Position), item]));
-    const slotPositions = Object.keys(EQUIPMENT_SLOTS)
-        .map(Number)
-        .sort((a, b) => a - b);
+function renderEquipmentLines(equipmentBySlot) {
+    const lines = [];
 
-    return slotPositions.map(position => {
-        const item = itemsBySlot.get(position);
-        if (item) return formatEquipmentLine(item);
-        const slot = EQUIPMENT_SLOTS[position] ?? `Pos ${position}`;
-        return `**${slot}:** —`;
-    });
-
-}
-
-function buildEquipmentPreview(items, limit = null) {
-    const slotLines = buildEquipmentSlotLines(items, { includeEmpty: true });
-    const maxItems = Number.isFinite(limit) ? Math.max(0, limit) : slotLines.length;
-    const lines = slotLines.slice(0, maxItems);
-    if (Number.isFinite(limit) && slotLines.length > maxItems) {
-        lines.push(`… +${slotLines.length - maxItems} más`);
+    for (const [slotIdStr, slotName] of Object.entries(EQUIPMENT_SLOTS)) {
+        const slotId = Number(slotIdStr);
+        const it = equipmentBySlot?.[slotId];
+        const itemName = it?.name?.trim() ? it.name.trim() : '—';
+        lines.push(`**${slotName}:** ${itemName}`);
     }
-    return lines.length ? lines.join('\n') : 'Sin equipamiento.';
+
+    return lines.join('\n');
+}
+
+function buildEquipmentPreview(items) {
+    const equipmentBySlot = buildEquipmentBySlot(items);
+    return renderEquipmentLines(equipmentBySlot) || 'Sin equipamiento.';
 }
 
 function buildEquipmentDetails(items) {
-    if (summary.length <= 1024) {
-        return summary;
+    const lines = buildEquipmentPreview(items);
+    if (lines.length <= 1024) {
+        return lines;
     }
-    return `${summary.slice(0, 1000)}\n…`;
+    return `${lines.slice(0, 1000)}\n…`;
+}
+
+function buildEquippedSelectOptions(items) {
+    const equipmentBySlot = buildEquipmentBySlot(items);
+    const options = [];
+
+    for (const [slotIdStr, slotName] of Object.entries(EQUIPMENT_SLOTS)) {
+        const slotId = Number(slotIdStr);
+        const it = equipmentBySlot?.[slotId];
+        if (!it?.name) continue;
+        const label = `${slotName} — ${it.name}`.slice(0, 100);
+        options.push({
+            label,
+            value: String(slotId),
+            description: Number.isFinite(Number(it.level)) ? `Nivel ${it.level}` : undefined,
+        });
+    }
+
+    return options.length ? options : [{ label: 'No hay items equipados', value: 'none' }];
+}
+
+function buildEquipmentStatsSelect(characterId, options) {
+    const select = new StringSelectMenuBuilder()
+        .setCustomId(`${SELECTS.EQUIPMENT}:${characterId}`)
+        .setPlaceholder('Elige un objeto')
+        .addOptions(options);
+
+    return new ActionRowBuilder().addComponents(select);
+}
+
+function buildEquipmentActions(characterId, { includeStats = true } = {}) {
+    const row = new ActionRowBuilder();
+
+    if (includeStats) {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`perfil.btn:equipstats:${characterId}`)
+                .setLabel('📊 Ver stats')
+                .setStyle(ButtonStyle.Primary)
+        );
+    }
+    row.addComponents(
+        new ButtonBuilder()
+            .setCustomId(`perfil.btn:summary:${characterId}`)
+            .setLabel('⬅️ Volver')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return row;
+}
+
+async function buildEquipmentImageAttachment(equipmentBySlot) {
+    const basePath = resolveEquipmentBasePath();
+    if (!basePath) return null;
+    const buffer = await buildEquipmentImage({
+        basePath,
+        equipmentBySlot,
+        resolveIconPath: (item) => resolveEquipmentIconPath(item?.itemId ?? item?.ItemId),
+    });
+    if (!buffer) return null;
+    return new AttachmentBuilder(buffer, { name: 'equipamiento.png' });
 }
 
 async function loadLinkedAccounts(pool, discordUserId) {
@@ -654,13 +720,41 @@ async function handlePerfilButton(interaction, ctx) {
         return interaction.editReply(view);
     }
 
+    if (action === 'summary') {
+        const view = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
+        return interaction.editReply(view);
+    }
+
     if (action === 'equip') {
         const equippedItems = await loadEquippedItems(worldPool, character.Id);
         const equipmentLines = buildEquipmentPreview(equippedItems);
+        const equipmentBySlot = buildEquipmentBySlot(equippedItems);
+        const equipmentImage = await buildEquipmentImageAttachment(equipmentBySlot);
+        const components = [buildEquipmentActions(character.Id)];
         const view = buildEquipmentView({
             character,
             level: Number(character.Level ?? 1),
             equipmentLines,
+            equipmentImage,
+            components,
+        });
+        return interaction.editReply(view);
+    }
+
+    if (action === 'equipstats') {
+        const equippedItems = await loadEquippedItems(worldPool, character.Id);
+        const equipmentLines = buildEquipmentPreview(equippedItems);
+        const equipmentBySlot = buildEquipmentBySlot(equippedItems);
+        const equipmentImage = await buildEquipmentImageAttachment(equipmentBySlot);
+        const options = buildEquippedSelectOptions(equippedItems);
+        const selectRow = buildEquipmentStatsSelect(character.Id, options);
+        const components = [selectRow, buildEquipmentActions(character.Id, { includeStats: false })];
+        const view = buildEquipmentView({
+            character,
+            level: Number(character.Level ?? 1),
+            equipmentLines,
+            equipmentImage,
+            components,
         });
         return interaction.editReply(view);
     }
@@ -671,12 +765,114 @@ async function handlePerfilButton(interaction, ctx) {
     });
 }
 
+async function handleEquipmentSelect(interaction, ctx) {
+    await interaction.deferUpdate();
+
+    const worldPool = await ctx.db.getPool('world');
+    if (!worldPool) {
+        return interaction.editReply({
+            content: '🟡 La base de datos no está configurada. Contacta con el Staff.',
+            components: [],
+        });
+    }
+
+    const parts = interaction.customId.split(':');
+    const charId = Number.parseInt(parts[parts.length - 1], 10);
+    if (!Number.isFinite(charId)) {
+        return interaction.editReply({
+            content: '🔴 Selección inválida.',
+            components: [],
+        });
+    }
+
+    const selection = interaction.values?.[0];
+    if (selection === 'none') {
+        const character = await loadCharacterById(worldPool, charId);
+        if (!character) {
+            return interaction.editReply({
+                content: '🔴 Personaje no encontrado.',
+                components: [],
+            });
+        }
+        const equippedItems = await loadEquippedItems(worldPool, character.Id);
+        const equipmentLines = buildEquipmentPreview(equippedItems);
+        const equipmentBySlot = buildEquipmentBySlot(equippedItems);
+        const equipmentImage = await buildEquipmentImageAttachment(equipmentBySlot);
+        const components = [buildEquipmentActions(character.Id)];
+        const view = buildEquipmentView({
+            character,
+            level: Number(character.Level ?? 1),
+            equipmentLines,
+            equipmentImage,
+            components,
+        });
+        return interaction.editReply(view);
+    }
+
+    const slotId = Number.parseInt(selection, 10);
+    if (!Number.isFinite(slotId)) {
+        return interaction.editReply({
+            content: '🔴 Selección inválida.',
+            components: [],
+        });
+    }
+
+    const character = await loadCharacterById(worldPool, charId);
+    if (!character) {
+        return interaction.editReply({
+            content: '🔴 Personaje no encontrado.',
+            components: [],
+        });
+    }
+
+    const equippedItems = await loadEquippedItems(worldPool, character.Id);
+    const item = equippedItems.find((entry) => Number(entry.Position) === slotId);
+    if (!item) {
+        return interaction.editReply({
+            content: '🔴 Ese objeto ya no está equipado.',
+            components: [],
+        });
+    }
+
+    const slotName = EQUIPMENT_SLOTS[slotId] ?? `Pos ${slotId}`;
+    const effects = parseSerializedEffects(item.SerializedEffects);
+    const effectsLines = effects.length ? effects.map(formatEffect) : ['Sin efectos'];
+    const iconPath = resolveEquipmentIconPath(item.ItemId);
+    const iconAttachment = iconPath
+        ? new AttachmentBuilder(iconPath, { name: `item-${item.ItemId}.png` })
+        : null;
+    const components = [
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`perfil.btn:equip:${character.Id}`)
+                .setLabel('⬅️ Equipamiento')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId(`perfil.btn:summary:${character.Id}`)
+                .setLabel('🏠 Perfil')
+                .setStyle(ButtonStyle.Secondary)
+        ),
+    ];
+    const view = buildItemStatsView({
+        character,
+        item,
+        slotName,
+        effectsLines,
+        iconAttachment,
+        components,
+    });
+    return interaction.editReply(view);
+}
+
 async function handlePerfilSelect(interaction, ctx) {
     if (interaction.customId === SELECTS.ACCOUNT) {
         return handlePerfilAccountSelect(interaction, ctx);
     }
     if (interaction.customId.startsWith(`${SELECTS.CHARACTER}:`)) {
         return handlePerfilCharacterSelect(interaction, ctx);
+    }
+    if (interaction.customId.startsWith(`${SELECTS.EQUIPMENT}:`)) {
+        return handleEquipmentSelect(interaction, ctx);
     }
     return interaction.reply({
         content: '🔴 Acción no reconocida.',
@@ -723,4 +919,4 @@ async function handlePerfilTabButton(interaction, ctx) {
     });
 }
 
-module.exports = { handlePerfilCommand, handlePerfilSelect, handlePerfilTabButton };
+module.exports = { handlePerfilCommand, handlePerfilSelect, handlePerfilTabButton, handlePerfilButton };
