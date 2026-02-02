@@ -371,6 +371,7 @@ async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SU
     const tokens = await fetchAccountTokens(authPool, character.AccountId);
     const equipmentSummary = buildEquipmentSummary(equippedItems);
     const equipmentDetails = buildEquipmentDetails(equippedItems);
+    const statsBlock = tab === PROFILE_TABS.STATS ? buildStatsBlock(character) : null;
 
     return buildProfileView({
         character,
@@ -384,6 +385,7 @@ async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SU
         breedName,
         equipmentSummary,
         equipmentDetails,
+        statsBlock,
         tab,
     });
 }

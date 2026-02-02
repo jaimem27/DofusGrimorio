@@ -29,23 +29,71 @@ function resolveBreedThumbnail(breed) {
     return new AttachmentBuilder(filePath, { name });
 }
 
-function statLine(label, base, perm) {
-    const baseValue = Number(base ?? 0);
-    const permValue = Number(perm ?? 0);
-    return `**${label}:** ${baseValue} (+${permValue})`;
+function alignmentSideName(side) {
+    if (side === 1) return 'Bonta';
+    if (side === 2) return 'Brakmar';
+    if (side === 3) return 'Mercenario';
+    return 'Neutral';
 }
 
-function buildStatsBlock(character) {
+function formatSurvival(wins, losses) {
+    const winValue = Number(wins ?? 0);
+    const lossValue = Number(losses ?? 0);
+    const total = winValue + lossValue;
+    if (total <= 0) return '—';
+    return `${Math.round((winValue / total) * 100)}%`;
+}
+
+function buildStatsBlock(character, alignmentLevel) {
+    const challenges = fmtInt(character.ChallengesCount ?? 0);
+    const challengesDungeon = fmtInt(character.ChallengesInDungeonCount ?? 0);
+    const achievementPoints = fmtInt(character.AchievementPoints ?? 0);
+
+    const winPvm = fmtInt(character.WinPvm ?? 0);
+    const losPvm = fmtInt(character.LosPvm ?? 0);
+    const winPvp = fmtInt(character.WinPvp ?? 0);
+    const losPvp = fmtInt(character.LosPvp ?? 0);
+    const pvmSurvival = formatSurvival(character.WinPvm, character.LosPvm);
+    const pvpSurvival = formatSurvival(character.WinPvp, character.LosPvp);
+
+    const alignmentSide = alignmentSideName(Number(character.AlignmentSide ?? 0));
+    const honor = fmtInt(character.Honor ?? 0);
+    const alignmentLevelLine =
+        Number.isFinite(Number(alignmentLevel)) && Number(alignmentLevel) > 0
+            ? `Nv. ${alignmentLevel}`
+            : 'Nv. —';
+
+    const strength = fmtInt(character.Strength ?? 0);
+    const intelligence = fmtInt(character.Intelligence ?? 0);
+    const chance = fmtInt(character.Chance ?? 0);
+    const agility = fmtInt(character.Agility ?? 0);
+    const vitality = fmtInt(character.Vitality ?? 0);
+    const wisdom = fmtInt(character.Wisdom ?? 0);
+    const prospection = fmtInt(character.Prospection ?? 0);
+    const ap = fmtInt(character.AP ?? 0);
+    const mp = fmtInt(character.MP ?? 0);
+
     return [
-        statLine('Fuerza', character.Strength, character.PermanentAddedStrength),
-        statLine('Inteligencia', character.Intelligence, character.PermanentAddedIntelligence),
-        statLine('Suerte', character.Chance, character.PermanentAddedChance),
-        statLine('Agilidad', character.Agility, character.PermanentAddedAgility),
-        statLine('Vitalidad', character.Vitality, character.PermanentAddedVitality),
-        statLine('Sabiduría', character.Wisdom, character.PermanentAddedWisdom),
+        `💪 **Fuerza:** ${strength}`,
+        `🧠 **Inteligencia:** ${intelligence}`,
+        `🍀 **Suerte:** ${chance}`,
+        `🏃 **Agilidad:** ${agility}`,
+        `❤️ **Vitalidad:** ${vitality}`,
+        `🪄 **Sabiduría:** ${wisdom}`,
+        `🎯 **Prospección (PP):** ${prospection}`,
+        `🔷 **PA:** ${ap} · 🟩 **PM:** ${mp}`,
         '',
-        `🎯 **Prospección (PP):** ${Number(character.Prospection ?? 0)}`,
-        `🔷 **PA:** ${Number(character.AP ?? 0)}   🟩 **PM:** ${Number(character.MP ?? 0)}`,
+        `🏅 **Desafíos:** ${challenges}`,
+        `🏰 **Desafíos en mazmorras:** ${challengesDungeon}`,
+        `⭐ **Puntos de logro:** ${achievementPoints}`,
+        `🏅 **Desafíos:** ${challenges}`,
+        `🏰 **Desafíos en mazmorras:** ${challengesDungeon}`,
+        `⭐ **Puntos de logro:** ${achievementPoints}`,
+        '',
+        `⚔️ **PvM:** ${winPvm}V / ${losPvm}D · ${pvmSurvival} supervivencia`,
+        `🥊 **PvP:** ${winPvp}V / ${losPvp}D · ${pvpSurvival} supervivencia`,
+        `🛡️ **Alineamiento:** ${alignmentSide} (${alignmentLevelLine})`,
+        `🎖️ **Honor:** ${honor}`,
     ].join('\n');
 }
 
@@ -94,40 +142,7 @@ function buildProfileView({
     if (tab === 'stats') {
         embed
             .setTitle(`📊 Stats de ${character.Name} (Nv. ${level})`)
-            .addFields(
-                {
-                    name: '🪪 Clase',
-                    value:
-                        `**Clase:** ${breedName ?? `Breed ${character.Breed}`}\n` +
-                        `**Sexo:** ${sexName(Number(character.Sex))}`,
-                    inline: true,
-                },
-                {
-                    name: '❤️ Vitalidad',
-                    value: `**Vida:** ${fmtInt(hpNow)} / ${fmtInt(hpMax)}`,
-                    inline: true,
-                },
-                {
-                    name: '⚔️ PA / PM',
-                    value: `**PA:** ${character.AP} · **PM:** ${character.MP}`,
-                    inline: true,
-                },
-                {
-                    name: '⚡ Energía',
-                    value: `**Energía:** ${character.Energy} / ${character.EnergyMax}`,
-                    inline: true,
-                },
-                {
-                    name: '💰 Economía',
-                    value: `**Kamas:** ${fmtInt(character.Kamas)}\n**Ogrinas:** ${tokensLine}`,
-                    inline: true,
-                },
-                {
-                    name: '✨ Experiencia',
-                    value: xpLine,
-                    inline: true,
-                }
-            );
+            .setDescription(statsBlock ?? 'Sin estadísticas.');
     } else if (tab === 'equipment') {
         embed
             .setTitle(`🎒 Equipamiento de ${character.Name} (Nv. ${level})`)
