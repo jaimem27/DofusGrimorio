@@ -74,6 +74,7 @@ function buildProfileView({
     breedName,
     equipmentSummary,
     equipmentDetails,
+    statsBlock,
     tab = 'summary',
 }) {
     const tokensLine = tokens !== null ? fmtInt(tokens) : '—';
