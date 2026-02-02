@@ -56,6 +56,15 @@ async function fetchLevelExp(pool, level) {
     return rows?.[0]?.CharacterExp ?? null;
 }
 
+async function fetchAlignmentLevel(pool, honor) {
+    if (!Number.isFinite(Number(honor))) return null;
+    const [rows] = await pool.query(
+        'SELECT Level FROM experiences WHERE AlignmentHonor <= ? ORDER BY Level DESC LIMIT 1;',
+        [honor]
+    );
+    return rows?.[0]?.Level ?? null;
+}
+
 async function fetchSubareaName(pool, mapId) {
     const [rows] = await pool.query(
         'SELECT Name FROM world_subareas WHERE FIND_IN_SET(?, MapsIdsCSV) LIMIT 1;',
@@ -240,6 +249,11 @@ async function loadCharacterByName(pool, name) {
           c.PermanentAddedStrength, c.PermanentAddedIntelligence, c.PermanentAddedChance,
           c.PermanentAddedAgility, c.PermanentAddedVitality, c.PermanentAddedWisdom,
           c.Prospection,
+          c.AlignmentSide, c.Honor,
+          c.ChallengesCount, c.ChallengesInDungeonCount,
+          c.AchievementPoints,
+          c.WinPvm, c.LosPvm,
+          c.WinPvp, c.LosPvp,
           c.Energy, c.EnergyMax,
           c.Kamas, c.Experience,
           c.CreationDate, c.LastUsage,
@@ -270,6 +284,11 @@ async function loadCharacterById(pool, charId) {
           c.PermanentAddedStrength, c.PermanentAddedIntelligence, c.PermanentAddedChance,
           c.PermanentAddedAgility, c.PermanentAddedVitality, c.PermanentAddedWisdom,
           c.Prospection,
+          c.AlignmentSide, c.Honor,
+          c.ChallengesCount, c.ChallengesInDungeonCount,
+          c.AchievementPoints,
+          c.WinPvm, c.LosPvm,
+          c.WinPvp, c.LosPvp,
           c.Energy, c.EnergyMax,
           c.Kamas, c.Experience,
           c.CreationDate, c.LastUsage,
@@ -371,7 +390,10 @@ async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SU
     const tokens = await fetchAccountTokens(authPool, character.AccountId);
     const equipmentSummary = buildEquipmentSummary(equippedItems);
     const equipmentDetails = buildEquipmentDetails(equippedItems);
-    const statsBlock = tab === PROFILE_TABS.STATS ? buildStatsBlock(character) : null;
+    const alignmentLevel =
+        tab === PROFILE_TABS.STATS ? await fetchAlignmentLevel(worldPool, character.Honor) : null;
+    const statsBlock =
+        tab === PROFILE_TABS.STATS ? buildStatsBlock(character, alignmentLevel) : null;
 
     return buildProfileView({
         character,
@@ -594,7 +616,8 @@ async function handlePerfilButton(interaction, ctx) {
     }
 
     if (action === 'stats') {
-        const statsBlock = buildStatsBlock(character);
+        const alignmentLevel = await fetchAlignmentLevel(worldPool, character.Honor);
+        const statsBlock = buildStatsBlock(character, alignmentLevel);
         const view = buildStatsView({
             character,
             level: Number(character.Level ?? 1),

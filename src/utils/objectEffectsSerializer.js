@@ -12,7 +12,7 @@ const path = require('node:path');
  */
 function loadEffectsMap() {
     try {
-        path.resolve(process.cwd(), 'src', 'data', 'effects-map.json')
+        const p = path.resolve(process.cwd(), 'src', 'data', 'effects-map.json');
         if (!fs.existsSync(p)) return null;
         const raw = fs.readFileSync(p, 'utf8');
         return JSON.parse(raw);
@@ -130,64 +130,14 @@ const EFFECT_TYPES = {
     10: 'EffectString',
 };
 
-/**
- * Overrides bonitos (mandan por encima del JSON)
- */
-const EFFECT_LABELS = {
-    78: 'PM',
-    105: 'Reducción de daños',
-    106: 'Reenvío de hechizos',
-    107: 'Reenvío de daños',
-    110: 'Vitalidad',
-    111: 'PA',
-    112: 'Daños',
-    114: 'Multiplicador de daños',
-    115: 'Golpes críticos',
-    116: 'Alcance',
-    117: 'Alcance',
-    118: 'Fuerza',
-    119: 'Agilidad',
-    123: 'Suerte',
-    124: 'Sabiduría',
-    125: 'Vitalidad',
-    126: 'Inteligencia',
-    136: 'Alcance',
-    160: 'Esquiva PA',
-    161: 'Esquiva PM',
-    165: 'Daños (%)',
-    174: 'Iniciativa',
-    176: 'Prospección',
-    178: 'Curaciones',
-    182: 'Invocaciones',
-    210: 'Resistencia Tierra (%)',
-    211: 'Resistencia Agua (%)',
-    212: 'Resistencia Aire (%)',
-    213: 'Resistencia Fuego (%)',
-    214: 'Resistencia Neutro (%)',
-    220: 'Reenvío de daños',
-    225: 'Daños de trampa',
-    226: 'Daños de trampa (%)',
-    240: 'Reducción Tierra',
-    241: 'Reducción Agua',
-    242: 'Reducción Aire',
-    243: 'Reducción Fuego',
-    244: 'Reducción Neutro',
-    410: 'PM',
-    412: 'PA',
-};
 
 function getEffectLabel(effectId, fallbackType) {
-    // 1) Override bonito
-    if (EFFECT_LABELS[effectId]) return EFFECT_LABELS[effectId];
-
-    // 2) Fallback desde effects-map.json (summary / name)
     if (EFFECTS_MAP && EFFECTS_MAP[String(effectId)]) {
         const row = EFFECTS_MAP[String(effectId)];
-        return row.summary || row.name || `Efecto ${effectId}`;
+        return row.summary || row.name || null;
     }
 
-    // 3) Último recurso
-    return fallbackType || `Efecto ${effectId}`;
+    return null;
 }
 
 function isPercentLabel(label) {
@@ -219,6 +169,7 @@ function formatDateParts(year, month, day, hour, minute) {
  */
 function decorateEffect(effect) {
     const label = getEffectLabel(effect.id, effect.type);
+    if (!label) return null;
     const out = { ...effect, label, display: label };
 
     switch (effect.serializationId) {
@@ -426,7 +377,10 @@ function deserializeEffects(buffer) {
     while (reader.offset < reader.buffer.length) {
         const before = reader.offset;
         const eff = readEffect(reader);
-        effects.push(decorateEffect(eff));
+        const decorated = decorateEffect(eff);
+        if (decorated) {
+            effects.push(decorated);
+        }
 
         if (reader.offset === before) {
             throw new Error('Reader offset did not advance; possible corrupted effects blob.');
@@ -450,6 +404,7 @@ function deserializeEffectsFromBase64(base64String) {
  */
 function formatEffectsLine(effects, max = 10) {
     const lines = effects
+        .filter((e) => e && e.display)
         .map((e) => e.display)
         .filter(Boolean);
 
@@ -461,6 +416,5 @@ module.exports = {
     deserializeEffects,
     deserializeEffectsFromHex,
     deserializeEffectsFromBase64,
-    formatEffectsLine,
-    EFFECT_LABELS,
+    formatEffectsLine
 };
