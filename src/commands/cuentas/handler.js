@@ -384,7 +384,7 @@ async function createAccounts(pool, discordUserId, payload) {
 
     const logins = buildLoginList(loginBase, qty);
     const nicknames = buildNicknameList(nicknameBase, qty);
-    const passwordHash = crypto.createHash('sha256').update(password, 'utf8').digest('hex');
+    const passwordHash = crypto.createHash('md5').update(password, 'utf8').digest('hex');
 
     const conn = await pool.getConnection();
     try {

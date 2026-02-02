@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 
@@ -35,6 +36,37 @@ function resolveBrandingPath(filename) {
     if (fs.existsSync(pngPath)) return pngPath;
 
     return null;
+}
+
+async function fetchOnlinePlayers(db) {
+    const worldPool = await db.getPool('world');
+    if (!worldPool) return null;
+
+    const [rows] = await worldPool.query('SELECT COUNT(*) AS total FROM accounts WHERE ConnectedCharacter IS NOT NULL AND LastConnection > DATE_SUB(NOW(), INTERVAL 10 MINUTE)');
+    const total = rows?.[0]?.total ?? rows?.[0]?.['COUNT(*)'];
+    return Number(total ?? 0);
+}
+
+async function updatePresence(db) {
+    try {
+        const onlinePlayers = await fetchOnlinePlayers(db);
+        const label = Number.isFinite(onlinePlayers)
+            ? `Dofus • ${onlinePlayers} jugadores online`
+            : 'Dofus • jugadores online';
+
+        client.user.setPresence({
+            status: 'online',
+            activities: [
+                {
+                    name: label,
+                    type: 0,
+                },
+            ],
+        });
+    } catch (err) {
+        if (logError) logError(err, 'No se pudo actualizar el estado del bot');
+        else console.error(err);
+    }
 }
 
 async function bootstrap() {
@@ -147,43 +179,37 @@ async function bootstrap() {
     });
 
     client.once('ready', async () => {
-        if (process.env.SET_BRANDING !== 'true') return;
+        if (process.env.SET_BRANDING === 'true') {
+            const iconPath = resolveBrandingPath('icon');
+            const bannerPath = resolveBrandingPath('banner')
 
-        const iconPath = resolveBrandingPath('icon');
-        const bannerPath = resolveBrandingPath('banner');
+            if (!iconPath) {
+                (logError ? logError('No se encontró icon.jpg/icon.png en src/assets/bot') : console.error('No se encontró icon.jpg/icon.png en src/assets/bot'));
+            } else {
+                try {
+                    await client.user.setAvatar(iconPath);
+                    (logInfo ? logInfo('Icono del bot actualizado') : console.log('Icono del bot actualizado'));
+                } catch (err) {
+                    (logError ? logError(err, 'Error al actualizar icono del bot') : console.error(err));
+                }
+            }
 
-        if (!iconPath) {
-            (logError ? logError('No se encontró icon.jpg/icon.png en src/assets/bot') : console.error('No se encontró icon.jpg/icon.png en src/assets/bot'));
-        } else {
-            try {
-                await client.user.setAvatar(iconPath);
-                (logInfo ? logInfo('Icono del bot actualizado') : console.log('Icono del bot actualizado'));
-            } catch (err) {
-                (logError ? logError(err, 'Error al actualizar icono del bot') : console.error(err));
+            if (!bannerPath) {
+                (logError ? logError('No se encontró banner.jpg/banner.png en src/assets/bot') : console.error('No se encontró banner.jpg/banner.png en src/assets/bot'));
+            } else {
+                try {
+                    await client.user.setBanner(bannerPath);
+                    (logInfo ? logInfo('Banner del bot actualizado') : console.log('Banner del bot actualizado'));
+                } catch (err) {
+                    (logError ? logError(err, 'Error al actualizar banner del bot') : console.error(err));
+                }
             }
         }
 
-        if (!bannerPath) {
-            (logError ? logError('No se encontró banner.jpg/banner.png en src/assets/bot') : console.error('No se encontró banner.jpg/banner.png en src/assets/bot'));
-            return;
-        }
-
-        try {
-            await client.user.setBanner(bannerPath);
-            (logInfo ? logInfo('Banner del bot actualizado') : console.log('Banner del bot actualizado'));
-        } catch (err) {
-            (logError ? logError(err, 'Error al actualizar banner del bot') : console.error(err));
-        }
-
-        client.user.setPresence({
-            status: 'online',
-            activities: [
-                {
-                    name: 'Jugando con Shine',
-                    type: 0,
-                },
-            ],
-        });
+        await updatePresence(ctx.db);
+        setInterval(() => {
+            updatePresence(ctx.db);
+        }, Number(process.env.PRESENCE_REFRESH_MS || 60000));
     });
 
     // Login discord
