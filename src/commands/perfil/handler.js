@@ -73,6 +73,21 @@ async function fetchSubareaName(pool, mapId) {
     return rows?.[0]?.Name ?? null;
 }
 
+async function fetchGuildName(pool, characterId) {
+    const [rows] = await pool.query(
+        `
+        SELECT g.Name
+        FROM guild_members gm
+        INNER JOIN guilds g ON g.Id = gm.GuildId
+        WHERE gm.CharacterId = ?
+        LIMIT 1;
+        `,
+        [characterId]
+    );
+    return rows?.[0]?.Name ?? null;
+}
+
+
 async function fetchBreedName(pool, breedId) {
     const [rows] = await pool.query(
         'SELECT ShortName FROM breeds WHERE Id = ? LIMIT 1;',
@@ -180,28 +195,39 @@ function buildEquipmentSummary(items) {
     return `${summary.slice(0, 1000)}\n…`;
 }
 
-function buildEquipmentPreview(items, limit = 2) {
-    if (!items.length) return 'Sin equipamiento.';
-    const lines = items.slice(0, limit).map(item => {
-        const slot = EQUIPMENT_SLOTS[item.Position] ?? `Pos ${item.Position}`;
-        const effects = parseSerializedEffects(item.SerializedEffects);
-        const effectsSummary = summarizeItemEffects(effects);
-        return `**${slot}** · Obj ${item.ItemId}\n${effectsSummary}`;
+function formatEquipmentLine(item) {
+    const slot = EQUIPMENT_SLOTS[item.Position] ?? `Pos ${item.Position}`;
+    const name = formatItemName(item);
+    return `**${slot}:** ${name}`;
+}
+
+function buildEquipmentSlotLines(items, { includeEmpty = false } = {}) {
+    if (!items.length && !includeEmpty) return [];
+    const itemsBySlot = new Map(items.map(item => [Number(item.Position), item]));
+    const slotPositions = Object.keys(EQUIPMENT_SLOTS)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+    return slotPositions.map(position => {
+        const item = itemsBySlot.get(position);
+        if (item) return formatEquipmentLine(item);
+        const slot = EQUIPMENT_SLOTS[position] ?? `Pos ${position}`;
+        return `**${slot}:** —`;
     });
-    return lines.join('\n\n');
+
+}
+
+function buildEquipmentPreview(items, limit = null) {
+    const slotLines = buildEquipmentSlotLines(items, { includeEmpty: true });
+    const maxItems = Number.isFinite(limit) ? Math.max(0, limit) : slotLines.length;
+    const lines = slotLines.slice(0, maxItems);
+    if (Number.isFinite(limit) && slotLines.length > maxItems) {
+        lines.push(`… +${slotLines.length - maxItems} más`);
+    }
+    return lines.length ? lines.join('\n') : 'Sin equipamiento.';
 }
 
 function buildEquipmentDetails(items) {
-    if (!items.length) return 'Sin equipamiento.';
-    const lines = items.map(item => {
-        const slot = EQUIPMENT_SLOTS[item.Position] ?? `Pos ${item.Position}`;
-        const effects = parseSerializedEffects(item.SerializedEffects);
-        const effectsSummary = summarizeItemEffects(effects, 8);
-        const name = formatItemName(item);
-        const level = formatItemLevel(item);
-        return `**${slot}** · ${name} (${level})\n${effectsSummary}`;
-    });
-    const summary = lines.join('\n\n');
     if (summary.length <= 1024) {
         return summary;
     }
@@ -381,9 +407,10 @@ async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SU
             ? ((xpCurrent - Number(currentExpLevel)) / (Number(nextExp) - Number(currentExpLevel))) * 100
             : null;
     const xpPercent = clampPercent(xpPercentRaw);
-    const [subareaName, breedName, equippedItems] = await Promise.all([
+    const [subareaName, breedName, guildName, equippedItems] = await Promise.all([
         fetchSubareaName(worldPool, character.MapId),
         fetchBreedName(worldPool, character.Breed),
+        fetchGuildName(worldPool, character.Id),
         loadEquippedItems(worldPool, character.Id),
     ]);
     const authPool = await ctx.db.getPool('auth');
@@ -405,6 +432,7 @@ async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SU
         subareaName,
         tokens,
         breedName,
+        guildName,
         equipmentSummary,
         equipmentDetails,
         statsBlock,
@@ -628,7 +656,7 @@ async function handlePerfilButton(interaction, ctx) {
 
     if (action === 'equip') {
         const equippedItems = await loadEquippedItems(worldPool, character.Id);
-        const equipmentLines = buildEquipmentPreview(equippedItems, 2);
+        const equipmentLines = buildEquipmentPreview(equippedItems);
         const view = buildEquipmentView({
             character,
             level: Number(character.Level ?? 1),

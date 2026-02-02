@@ -44,6 +44,13 @@ function formatSurvival(wins, losses) {
     return `${Math.round((winValue / total) * 100)}%`;
 }
 
+function formatBaseWithPermanent(baseValue, permanentValue) {
+    const base = fmtInt(baseValue ?? 0);
+    const permanent = Number(permanentValue ?? 0);
+    const permanentLabel = `${permanent >= 0 ? '+' : ''}${fmtInt(permanent)}`;
+    return `${base} (${permanentLabel})`;
+}
+
 function buildStatsBlock(character, alignmentLevel) {
     const challenges = fmtInt(character.ChallengesCount ?? 0);
     const challengesDungeon = fmtInt(character.ChallengesInDungeonCount ?? 0);
@@ -63,11 +70,26 @@ function buildStatsBlock(character, alignmentLevel) {
             ? `Nv. ${alignmentLevel}`
             : 'Nv. —';
 
-    const strength = fmtInt(character.Strength ?? 0);
-    const intelligence = fmtInt(character.Intelligence ?? 0);
-    const chance = fmtInt(character.Chance ?? 0);
-    const agility = fmtInt(character.Agility ?? 0);
-    const vitality = fmtInt(character.Vitality ?? 0);
+    const strength = formatBaseWithPermanent(
+        character.Strength,
+        character.PermanentAddedStrength
+    );
+    const intelligence = formatBaseWithPermanent(
+        character.Intelligence,
+        character.PermanentAddedIntelligence
+    );
+    const chance = formatBaseWithPermanent(
+        character.Chance,
+        character.PermanentAddedChance
+    );
+    const agility = formatBaseWithPermanent(
+        character.Agility,
+        character.PermanentAddedAgility
+    );
+    const vitality = formatBaseWithPermanent(
+        character.Vitality,
+        character.PermanentAddedVitality
+    );
     const wisdom = fmtInt(character.Wisdom ?? 0);
     const prospection = fmtInt(character.Prospection ?? 0);
     const ap = fmtInt(character.AP ?? 0);
@@ -118,6 +140,7 @@ function buildProfileView({
     subareaName,
     tokens,
     breedName,
+    guildName,
     equipmentSummary,
     equipmentDetails,
     statsBlock,
@@ -157,7 +180,8 @@ function buildProfileView({
                     name: '🪪 Clase',
                     value:
                         `**Clase:** ${breedName ?? `Breed ${character.Breed}`}\n` +
-                        `**Sexo:** ${sexName(Number(character.Sex))}`,
+                        `**Sexo:** ${sexName(Number(character.Sex))}\n` +
+                        `**Gremio:** ${guildName ?? '—'}`,
                     inline: true,
                 },
                 {
@@ -219,9 +243,9 @@ function buildStatsView({ character, level, statsBlock }) {
 
 function buildEquipmentView({ character, level, equipmentLines }) {
     const embed = new EmbedBuilder()
-        .setTitle(`🎒 Equipamiento de ${character.Name} (Nv. ${level})`)
+        .setTitle(`${character.Name} (Nv. ${level})`)
         .setColor(0x2f3136)
-        .setDescription(equipmentLines);
+        .setDescription(`🎒**Equipamiento:**\n${equipmentLines}`);
 
     return {
         embeds: [embed],
