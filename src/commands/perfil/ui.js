@@ -163,13 +163,13 @@ function buildProfileView({
 
     if (tab === 'stats') {
         embed
-            .setTitle(`📊 Stats de ${character.Name} (Nv. ${level})`)
+            .setTitle(`${character.Name} (Nv. ${level})`)
             .setDescription(statsBlock ?? 'Sin estadísticas.');
     } else if (tab === 'equipment') {
         embed
-            .setTitle(`🎒 Equipamiento de ${character.Name} (Nv. ${level})`)
+            .setTitle(`${character.Name} (Nv. ${level})`)
             .addFields({
-                name: '📦 Equipamiento',
+                name: '🎒 Equipamiento',
                 value: equipmentDetails || 'Sin equipamiento.',
                 inline: false,
             });

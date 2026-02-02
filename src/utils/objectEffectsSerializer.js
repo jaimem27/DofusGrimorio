@@ -222,9 +222,7 @@ function decorateEffect(effect) {
         case 6: {
             // Integer
             if (typeof effect.value === 'number') {
-                out.display = `${label} ${formatSigned(effect.value)}`;
-                // Si es un label de %, lo dejamos tal cual (ya incluye % en label)
-                // No añadimos % extra para no duplicar.
+                out.display = `${label} ${formatSigned(applyNegative(effect.value))}`;
             }
             return out;
         }
