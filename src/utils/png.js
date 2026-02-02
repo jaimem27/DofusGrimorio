@@ -4,6 +4,7 @@ const zlib = require('zlib');
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const COLOR_TYPE_RGBA = 6;
 const COLOR_TYPE_RGB = 2;
+const COLOR_TYPE_INDEXED = 3;
 
 function buildCrcTable() {
     const table = new Uint32Array(256);
@@ -88,6 +89,8 @@ function readPng(input) {
     let colorType = null;
     let interlace = 0;
     const idatChunks = [];
+    let palette = null;
+    let transparency = null;
 
     let offset = PNG_SIGNATURE.length;
     while (offset + 8 <= buffer.length) {
@@ -106,6 +109,10 @@ function readPng(input) {
             interlace = data[12];
         } else if (type === 'IDAT') {
             idatChunks.push(data);
+        } else if (type === 'PLTE') {
+            palette = data;
+        } else if (type === 'tRNS') {
+            transparency = data;
         } else if (type === 'IEND') {
             break;
         }
@@ -114,11 +121,17 @@ function readPng(input) {
     if (!width || !height) return null;
     if (bitDepth !== 8) return null;
     if (interlace !== 0) return null;
-    if (colorType !== COLOR_TYPE_RGBA && colorType !== COLOR_TYPE_RGB) return null;
+    if (
+        colorType !== COLOR_TYPE_RGBA &&
+        colorType !== COLOR_TYPE_RGB &&
+        colorType !== COLOR_TYPE_INDEXED
+    ) {
+        return null;
+    }
 
     const compressed = Buffer.concat(idatChunks);
     const inflated = zlib.inflateSync(compressed);
-    const bpp = colorType === COLOR_TYPE_RGBA ? 4 : 3;
+    const bpp = colorType === COLOR_TYPE_RGBA ? 4 : colorType === COLOR_TYPE_RGB ? 3 : 1;
     const raw = unfilterData(inflated, width, height, bpp);
     if (!raw) return null;
 
@@ -127,11 +140,32 @@ function readPng(input) {
     }
 
     const rgba = Buffer.alloc(width * height * 4);
-    for (let i = 0, j = 0; i < raw.length; i += 3, j += 4) {
-        rgba[j] = raw[i];
-        rgba[j + 1] = raw[i + 1];
-        rgba[j + 2] = raw[i + 2];
-        rgba[j + 3] = 255;
+    if (colorType === COLOR_TYPE_RGB) {
+        for (let i = 0, j = 0; i < raw.length; i += 3, j += 4) {
+            rgba[j] = raw[i];
+            rgba[j + 1] = raw[i + 1];
+            rgba[j + 2] = raw[i + 2];
+            rgba[j + 3] = 255;
+        }
+        return { width, height, data: rgba };
+    }
+
+    if (!palette) return null;
+    const paletteEntries = Math.floor(palette.length / 3);
+    for (let i = 0, j = 0; i < raw.length; i += 1, j += 4) {
+        const idx = raw[i];
+        if (idx >= paletteEntries) {
+            rgba[j] = 0;
+            rgba[j + 1] = 0;
+            rgba[j + 2] = 0;
+            rgba[j + 3] = 0;
+            continue;
+        }
+        const palOffset = idx * 3;
+        rgba[j] = palette[palOffset];
+        rgba[j + 1] = palette[palOffset + 1];
+        rgba[j + 2] = palette[palOffset + 2];
+        rgba[j + 3] = transparency && idx < transparency.length ? transparency[idx] : 255;
     }
     return { width, height, data: rgba };
 }

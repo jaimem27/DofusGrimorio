@@ -172,7 +172,10 @@ function decorateEffect(effect) {
     if (!rawLabel) return null;
     const isNegativeLabel = rawLabel.trim().startsWith('-');
     const label = isNegativeLabel ? rawLabel.replace(/^-+\s*/, '').trim() : rawLabel;
-    const applyNegative = (value) => (isNegativeLabel && typeof value === 'number' ? -value : value);
+    const applyNegative = (value) => {
+        if (!isNegativeLabel || typeof value !== 'number') return value;
+        return -Math.abs(value);
+    };
     const normalizeRange = (min, max) => {
         if (typeof min !== 'number' || typeof max !== 'number') return { min, max };
         const signedMin = applyNegative(min);

@@ -273,7 +273,10 @@ async function buildEquipmentImageAttachment(equipmentBySlot) {
     const buffer = await buildEquipmentImage({
         basePath,
         equipmentBySlot,
-        resolveIconPath: (item) => resolveEquipmentIconPath(item?.itemId ?? item?.ItemId),
+        resolveIconPath: (item) =>
+            resolveEquipmentIconPath(
+                item?.iconId ?? item?.IconId ?? item?.itemId ?? item?.ItemId
+            ),
     });
     if (!buffer) return null;
     return new AttachmentBuilder(buffer, { name: 'equipamiento.png' });
