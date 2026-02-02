@@ -1,5 +1,31 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
+
+/**
+ * Intenta cargar el mapa generado (effects-map.json)
+ * - Se genera 1 vez desde EffectsEnum.cs
+ * - En runtime solo usamos el JSON
+ *
+ * Ruta recomendada: <root>/data/effects-map.json
+ */
+function loadEffectsMap() {
+    try {
+        path.resolve(process.cwd(), 'src', 'data', 'effects-map.json')
+        if (!fs.existsSync(p)) return null;
+        const raw = fs.readFileSync(p, 'utf8');
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+const EFFECTS_MAP = loadEffectsMap();
+
+/**
+ * Reader estilo .NET BinaryReader (LE) con string 7-bit.
+ */
 class DotNetBinaryReader {
     constructor(buffer) {
         this.buffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
@@ -8,7 +34,9 @@ class DotNetBinaryReader {
 
     ensure(length) {
         if (this.offset + length > this.buffer.length) {
-            throw new RangeError(`Not enough data to read ${length} bytes at offset ${this.offset}.`);
+            throw new RangeError(
+                `Not enough data to read ${length} bytes at offset ${this.offset}.`
+            );
         }
     }
 
@@ -75,28 +103,17 @@ class DotNetBinaryReader {
 
     readString() {
         const length = this.read7BitEncodedInt();
-        if (length === 0) {
-            return '';
-        }
+        if (length === 0) return '';
         const bytes = this.readBytes(length);
         return bytes.toString('utf8');
     }
 
-    readChar() {
-        const firstByte = this.readByte();
-        if (firstByte <= 0x7f) {
-            return String.fromCharCode(firstByte);
-        }
-        let byteCount = 1;
-        if ((firstByte & 0xe0) === 0xc0) {
-            byteCount = 2;
-        } else if ((firstByte & 0xf0) === 0xe0) {
-            byteCount = 3;
-        } else if ((firstByte & 0xf8) === 0xf0) {
-            byteCount = 4;
-        }
-        const remaining = this.readBytes(byteCount - 1);
-        return Buffer.concat([Buffer.from([firstByte]), remaining]).toString('utf8');
+    /**
+     * Header byte como ASCII (más robusto que "readChar" UTF-8 variable).
+     */
+    readAsciiChar() {
+        const b = this.readByte();
+        return String.fromCharCode(b);
     }
 }
 
@@ -113,12 +130,20 @@ const EFFECT_TYPES = {
     10: 'EffectString',
 };
 
+/**
+ * Overrides bonitos (mandan por encima del JSON)
+ */
 const EFFECT_LABELS = {
     78: 'PM',
+    105: 'Reducción de daños',
+    106: 'Reenvío de hechizos',
+    107: 'Reenvío de daños',
     110: 'Vitalidad',
     111: 'PA',
     112: 'Daños',
+    114: 'Multiplicador de daños',
     115: 'Golpes críticos',
+    116: 'Alcance',
     117: 'Alcance',
     118: 'Fuerza',
     119: 'Agilidad',
@@ -139,6 +164,7 @@ const EFFECT_LABELS = {
     212: 'Resistencia Aire (%)',
     213: 'Resistencia Fuego (%)',
     214: 'Resistencia Neutro (%)',
+    220: 'Reenvío de daños',
     225: 'Daños de trampa',
     226: 'Daños de trampa (%)',
     240: 'Reducción Tierra',
@@ -150,71 +176,121 @@ const EFFECT_LABELS = {
     412: 'PA',
 };
 
+function getEffectLabel(effectId, fallbackType) {
+    // 1) Override bonito
+    if (EFFECT_LABELS[effectId]) return EFFECT_LABELS[effectId];
+
+    // 2) Fallback desde effects-map.json (summary / name)
+    if (EFFECTS_MAP && EFFECTS_MAP[String(effectId)]) {
+        const row = EFFECTS_MAP[String(effectId)];
+        return row.summary || row.name || `Efecto ${effectId}`;
+    }
+
+    // 3) Último recurso
+    return fallbackType || `Efecto ${effectId}`;
+}
+
+function isPercentLabel(label) {
+    return label.includes('%') || label.includes('(%)');
+}
+
 function formatSigned(value) {
-    if (value > 0) {
-        return `+${value}`;
-    }
-    if (value < 0) {
-        return `${value}`;
-    }
+    if (typeof value !== 'number') return '';
+    if (value > 0) return `+${value}`;
+    if (value < 0) return `${value}`;
     return '0';
 }
 
 function formatRange(min, max) {
-    if (min === max) {
-        return formatSigned(min);
-    }
+    if (typeof min !== 'number' || typeof max !== 'number') return '';
+    if (min === max) return formatSigned(min);
     return `${formatSigned(min)} a ${formatSigned(max)}`;
 }
 
 function formatDateParts(year, month, day, hour, minute) {
-    const pad = (value) => String(value).padStart(2, '0');
+    const pad = (v) => String(v).padStart(2, '0');
     return `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}`;
 }
 
+/**
+ * Convierte el efecto a un "display" humano.
+ * - Oculta el tipo interno EffectInteger/EffectDice
+ * - Usa label bonito o fallback del JSON
+ */
 function decorateEffect(effect) {
-    const label = EFFECT_LABELS[effect.id] ?? effect.type;
-    const withLabel = { ...effect, label };
+    const label = getEffectLabel(effect.id, effect.type);
+    const out = { ...effect, label, display: label };
 
     switch (effect.serializationId) {
-        case 3:
-            withLabel.display = `${label} ${formatDateParts(effect.year, effect.month, effect.day, effect.hour, effect.minute)}`;
-            break;
-        case 4: {
-            const min = Math.min(effect.diceNum, effect.diceFace);
-            const max = Math.max(effect.diceNum, effect.diceFace);
-            if (min === 0 && max === 0) {
-                withLabel.display = `${label} ${formatSigned(effect.value)}`;
-            } else {
-                withLabel.display = `${label} ${formatRange(min, max)}`;
-            }
-            break;
+        case 3: {
+            out.display = `${label} ${formatDateParts(effect.year, effect.month, effect.day, effect.hour, effect.minute)}`;
+            return out;
         }
-        case 5:
-            withLabel.display = `${label} ${effect.days}d ${effect.hours}h ${effect.minutes}m`;
-            break;
-        case 6:
-            withLabel.display = `${label} ${formatSigned(effect.value)}`;
-            break;
-        case 8:
-            withLabel.display = `${label} ${formatRange(effect.min, effect.max)}`;
-            break;
-        case 10:
-            withLabel.display = `${label} ${effect.text}`;
-            break;
-        default:
-            if (typeof effect.value === 'number') {
-                withLabel.display = `${label} ${formatSigned(effect.value)}`;
-            } else {
-                withLabel.display = label;
-            }
-    }
 
-    return withLabel;
+        case 4: {
+            // Dice suele venir como value + (diceNum, diceFace)
+            // En items normalmente interesa el rango diceNum..diceFace
+            const a = typeof effect.diceNum === 'number' ? effect.diceNum : null;
+            const b = typeof effect.diceFace === 'number' ? effect.diceFace : null;
+
+            if (a !== null && b !== null) {
+                const min = Math.min(a, b);
+                const max = Math.max(a, b);
+                out.display = `${label} ${formatRange(min, max)}`;
+                return out;
+            }
+
+            // fallback si algo raro
+            if (typeof effect.value === 'number') {
+                out.display = `${label} ${formatSigned(effect.value)}`;
+            }
+            return out;
+        }
+
+        case 5: {
+            out.display = `${label} ${effect.days}d ${effect.hours}h ${effect.minutes}m`;
+            return out;
+        }
+
+        case 6: {
+            // Integer
+            if (typeof effect.value === 'number') {
+                out.display = `${label} ${formatSigned(effect.value)}`;
+                // Si es un label de %, lo dejamos tal cual (ya incluye % en label)
+                // No añadimos % extra para no duplicar.
+            }
+            return out;
+        }
+
+        case 8: {
+            // MinMax
+            // OJO: en readEffect lo guardamos como min/max correctamente
+            out.display = `${label} ${formatRange(effect.min, effect.max)}`;
+            return out;
+        }
+
+        case 10: {
+            out.display = `${label} ${effect.text || ''}`.trim();
+            return out;
+        }
+
+        default: {
+            // Base / Unknown -> intenta mostrar value si existe
+            if (typeof effect.value === 'number') {
+                out.display = `${label} ${formatSigned(effect.value)}`;
+            }
+            return out;
+        }
+    }
 }
 
+/**
+ * Lee la parte "base" del efecto (header 'C' o 'F')
+ * Cambiado a ASCII byte para evitar problemas de UTF.
+ */
 function readBaseEffect(reader) {
-    const header = reader.readChar();
+    const header = reader.readAsciiChar();
+
     if (header === 'C') {
         return {
             header,
@@ -222,6 +298,7 @@ function readBaseEffect(reader) {
             full: false,
         };
     }
+
     if (header !== 'F') {
         throw new Error(`Unexpected effect header '${header}'.`);
     }
@@ -263,9 +340,11 @@ function readEffect(reader) {
     switch (serializationId) {
         case 1:
             return effect;
+
         case 2:
             effect.monsterFamily = reader.readInt16();
             return effect;
+
         case 3:
             effect.year = reader.readInt16();
             effect.month = reader.readInt16();
@@ -273,28 +352,35 @@ function readEffect(reader) {
             effect.hour = reader.readInt16();
             effect.minute = reader.readInt16();
             return effect;
+
         case 4:
             effect.value = reader.readInt32();
             effect.diceNum = reader.readInt32();
             effect.diceFace = reader.readInt32();
             return effect;
+
         case 5:
             effect.days = reader.readInt16();
             effect.hours = reader.readInt16();
             effect.minutes = reader.readInt16();
             return effect;
+
         case 6:
             effect.value = reader.readInt32();
             return effect;
+
         case 7:
             effect.monsterFamily = reader.readInt16();
             effect.monsterCount = reader.readInt16();
             return effect;
+
         case 8:
-            effect.max = reader.readInt16();
+            // IMPORTANTE: min y max en orden lógico
             effect.min = reader.readInt16();
+            effect.max = reader.readInt16();
             return effect;
-        case 9:
+
+        case 9: {
             effect.mount = {
                 id: reader.readDouble(),
                 expirationDate: reader.readDouble(),
@@ -321,9 +407,12 @@ function readEffect(reader) {
                 }
             }
             return effect;
+        }
+
         case 10:
             effect.text = reader.readString();
             return effect;
+
         default:
             throw new Error(`Unsupported effect serialization identifier '${serializationId}'.`);
     }
@@ -332,9 +421,18 @@ function readEffect(reader) {
 function deserializeEffects(buffer) {
     const reader = new DotNetBinaryReader(buffer);
     const effects = [];
+
+    // Seguridad: evita loops infinitos si algo se descuadra
     while (reader.offset < reader.buffer.length) {
-        effects.push(decorateEffect(readEffect(reader)));
+        const before = reader.offset;
+        const eff = readEffect(reader);
+        effects.push(decorateEffect(eff));
+
+        if (reader.offset === before) {
+            throw new Error('Reader offset did not advance; possible corrupted effects blob.');
+        }
     }
+
     return effects;
 }
 
@@ -347,8 +445,22 @@ function deserializeEffectsFromBase64(base64String) {
     return deserializeEffects(Buffer.from(base64String, 'base64'));
 }
 
+/**
+ * Extra útil: compacta displays en una sola línea (para tu “modo completo”)
+ */
+function formatEffectsLine(effects, max = 10) {
+    const lines = effects
+        .map((e) => e.display)
+        .filter(Boolean);
+
+    if (lines.length <= max) return lines.join(' · ');
+    return `${lines.slice(0, max).join(' · ')} · +${lines.length - max} más`;
+}
+
 module.exports = {
     deserializeEffects,
     deserializeEffectsFromHex,
     deserializeEffectsFromBase64,
+    formatEffectsLine,
+    EFFECT_LABELS,
 };

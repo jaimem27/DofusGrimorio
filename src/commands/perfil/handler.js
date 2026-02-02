@@ -13,6 +13,11 @@ const PROFILE_TABS = {
     EQUIPMENT: 'equipment',
 };
 
+const SELECTS = {
+    ACCOUNT: 'perfil:select:account',
+    CHARACTER: 'perfil:select:character',
+};
+
 const EQUIPMENT_SLOTS = {
     0: 'Amuleto',
     1: 'Arma',
@@ -86,11 +91,12 @@ async function loadEquippedItems(pool, characterId) {
           COALESCE(w.Name, t.Name) AS ItemName,
           COALESCE(w.Level, t.Level) AS ItemLevel,
           COALESCE(w.IconId, t.IconId) AS IconId
-          FROM characters_items
+          FROM characters_items ci
           LEFT JOIN items_templates t ON t.Id = ci.ItemId
           LEFT JOIN items_templates_weapons w ON w.Id = ci.ItemId
           WHERE ci.OwnerId = ?
           AND ci.Position >= 0
+          AND ci.Position <= 18
         ORDER BY Position ASC;
         `,
         [characterId]

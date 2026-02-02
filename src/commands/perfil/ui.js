@@ -90,14 +90,6 @@ function buildProfileView({
 
     const embed = new EmbedBuilder().setColor(0x2f3136);
 
-    if (equipmentSummary) {
-        embed.addFields({
-            name: '🎒 Equipamiento',
-            value: equipmentSummary,
-            inline: false,
-        });
-    }
-
     if (tab === 'stats') {
         embed
             .setTitle(`📊 Stats de ${character.Name} (Nv. ${level})`)
@@ -186,13 +178,6 @@ function buildProfileView({
                 }
             );
 
-        if (equipmentSummary) {
-            embed.addFields({
-                name: '🎒 Equipamiento',
-                value: equipmentSummary,
-                inline: false,
-            });
-        }
     }
 
     if (thumbnail) {
