@@ -483,27 +483,40 @@ async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SU
     const tokens = await fetchAccountTokens(authPool, character.AccountId);
     const equipmentSummary = buildEquipmentSummary(equippedItems);
     const equipmentDetails = buildEquipmentDetails(equippedItems);
+    const equipmentBySlot = tab === PROFILE_TABS.EQUIPMENT ? buildEquipmentBySlot(equippedItems) : null;
+    const equipmentImage =
+        tab === PROFILE_TABS.EQUIPMENT && equipmentBySlot
+            ? await buildEquipmentImageAttachment(equipmentBySlot)
+            : null;
+    const equipmentSelectRow =
+        tab === PROFILE_TABS.EQUIPMENT
+            ? buildEquipmentStatsSelect(character.Id, buildEquippedSelectOptions(equippedItems))
+            : null;
     const alignmentLevel =
         tab === PROFILE_TABS.STATS ? await fetchAlignmentLevel(worldPool, character.Honor) : null;
     const statsBlock =
         tab === PROFILE_TABS.STATS ? buildStatsBlock(character, alignmentLevel) : null;
 
-    return buildProfileView({
-        character,
-        level,
-        hpNow,
-        hpMax,
-        xpPercent,
-        xpRemaining,
-        subareaName,
-        tokens,
-        breedName,
-        guildName,
-        equipmentSummary,
-        equipmentDetails,
-        statsBlock,
-        tab,
-    });
+    return {
+        view: buildProfileView({
+            character,
+            level,
+            hpNow,
+            hpMax,
+            xpPercent,
+            xpRemaining,
+            subareaName,
+            tokens,
+            breedName,
+            guildName,
+            equipmentSummary,
+            equipmentDetails,
+            statsBlock,
+            equipmentImage,
+            tab,
+        }),
+        extraComponents: equipmentSelectRow ? [equipmentSelectRow] : [],
+    };
 }
 
 async function handlePerfilCommand(interaction, ctx) {
@@ -559,7 +572,7 @@ async function handlePerfilCommand(interaction, ctx) {
         return;
     }
 
-    const view = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
+    const { view } = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
     const buttons = buildProfileButtons(character.Id, PROFILE_TABS.SUMMARY);
 
     await interaction.editReply({
@@ -670,7 +683,7 @@ async function handlePerfilCharacterSelect(interaction, ctx) {
         });
     }
 
-    const view = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
+    const { view } = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
     const buttons = buildProfileButtons(character.Id, PROFILE_TABS.SUMMARY);
 
     return interaction.editReply({
@@ -721,7 +734,7 @@ async function handlePerfilButton(interaction, ctx) {
     }
 
     if (action === 'summary') {
-        const view = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
+        const { view } = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
         return interaction.editReply(view);
     }
 
@@ -910,12 +923,12 @@ async function handlePerfilTabButton(interaction, ctx) {
         });
     }
 
-    const view = await buildProfileData(ctx, worldPool, character, tab);
+    const { view, extraComponents } = await buildProfileData(ctx, worldPool, character, tab);
     const buttons = buildProfileButtons(character.Id, tab);
 
     return interaction.editReply({
         ...view,
-        components: [buttons],
+        components: [...(extraComponents ?? []), buttons],
     });
 }
 

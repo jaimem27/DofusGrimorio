@@ -144,6 +144,7 @@ function buildProfileView({
     equipmentSummary,
     equipmentDetails,
     statsBlock,
+    equipmentImage,
     tab = 'summary',
 }) {
     const tokensLine = tokens !== null ? fmtInt(tokens) : '—';
@@ -171,6 +172,9 @@ function buildProfileView({
                 value: equipmentDetails || 'Sin equipamiento.',
                 inline: false,
             });
+        if (equipmentImage) {
+            embed.setImage(`attachment://${equipmentImage.name}`);
+        }
     } else {
         embed
             .setTitle(`👤 ${character.Name} (Nv. ${level})`)
@@ -221,9 +225,17 @@ function buildProfileView({
         embed.setThumbnail(`attachment://${thumbnail.name}`);
     }
 
+    const files = [];
+    if (thumbnail) {
+        files.push(thumbnail);
+    }
+    if (equipmentImage) {
+        files.push(equipmentImage);
+    }
+
     return {
         embeds: [embed],
-        files: thumbnail ? [thumbnail] : [],
+        files,
         components: [buildProfileButtons(character.Id)],
     };
 }
