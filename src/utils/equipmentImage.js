@@ -1,27 +1,26 @@
 const { readPng, writePng, resizeNearest, drawImage } = require('./png');
 
-const BASE_CANVAS = { width: 539, height: 520 };
+const BASE_CANVAS = { width: 545, height: 525 };
 
 const SLOT_POSITIONS = {
-    0: { x: 35, y: 35, w: 62, h: 62 }, // Amuleto
-    2: { x: 35, y: 105, w: 62, h: 62 }, // Anillo (izq.)
-    4: { x: 35, y: 174, w: 62, h: 62 }, // Anillo (der.)
-    6: { x: 453, y: 35, w: 62, h: 62 }, // Sombrero
-    7: { x: 453, y: 105, w: 62, h: 62 }, // Capa
-    3: { x: 453, y: 174, w: 62, h: 62 }, // Cinturón
-    5: { x: 453, y: 244, w: 62, h: 62 }, // Botas
-    1: { x: 35, y: 333, w: 62, h: 62 }, // Arma
-    15: { x: 105, y: 333, w: 62, h: 62 }, // Escudo
-    17: { x: 253, y: 355, w: 43, h: 45 }, // Compañero
-    16: { x: 383, y: 333, w: 62, h: 62 }, // Montura
-    8: { x: 453, y: 333, w: 62, h: 62 }, // Mascota
-    18: { x: 453, y: 333, w: 62, h: 62 }, // Mascota viva
-    9: { x: 35, y: 422, w: 62, h: 62 }, // Dofus 1
-    10: { x: 105, y: 422, w: 62, h: 62 }, // Dofus 2
-    11: { x: 174, y: 422, w: 62, h: 62 }, // Dofus 3
-    12: { x: 244, y: 422, w: 62, h: 62 }, // Dofus 4
-    13: { x: 313, y: 422, w: 62, h: 62 }, // Dofus 5
-    14: { x: 383, y: 422, w: 62, h: 62 }, // Dofus 6
+    0: { x: 19, y: 13, w: 74, h: 74 }, // Amuleto
+    6: { x: 452, y: 13, w: 74, h: 74 }, // Sombrero
+    15: { x: 19, y: 97, w: 74, h: 74 }, // Escudo
+    1: { x: 452, y: 97, w: 74, h: 74 }, // Arma
+    2: { x: 19, y: 181, w: 74, h: 74 }, // Anillo (izq.)
+    4: { x: 452, y: 181, w: 74, h: 74 }, // Anillo (der.)
+    3: { x: 19, y: 265, w: 74, h: 74 }, // Cinturón
+    7: { x: 452, y: 265, w: 74, h: 74 }, // Capa
+    5: { x: 19, y: 349, w: 74, h: 74 }, // Botas
+    8: { x: 452, y: 349, w: 74, h: 74 }, // Mascota
+    16: { x: 452, y: 349, w: 74, h: 74 }, // Montura
+    18: { x: 452, y: 349, w: 74, h: 74 }, // Mascota viva
+    9: { x: 19, y: 433, w: 74, h: 74 }, // Dofus 1
+    10: { x: 105, y: 433, w: 74, h: 74 }, // Dofus 2
+    11: { x: 192, y: 433, w: 74, h: 74 }, // Dofus 3
+    12: { x: 278, y: 433, w: 74, h: 74 }, // Dofus 4
+    13: { x: 365, y: 433, w: 74, h: 74 }, // Dofus 5
+    14: { x: 452, y: 433, w: 74, h: 74 }, // Dofus 6
 };
 
 function getScaledSlotPositions(base) {
