@@ -132,6 +132,50 @@ async function loadEquippedItems(pool, characterId) {
     return rows ?? [];
 }
 
+async function loadCharacterJobs(pool, characterId) {
+    const [rows] = await pool.query(
+        `
+        SELECT
+          cj.TemplateId,
+          cj.Experience,
+          j.Name AS JobName,
+          (SELECT e.Level
+           FROM experiences e
+           WHERE e.JobExp <= cj.Experience
+           ORDER BY e.Level DESC
+           LIMIT 1) AS Level
+        FROM characters_jobs cj
+        LEFT JOIN jobs j ON j.Id = cj.TemplateId
+        WHERE cj.AccountId = ?;
+        `,
+        [characterId]
+    );
+    return rows ?? [];
+}
+
+function formatJobLevel(jobLevel) {
+    if (!Number.isFinite(Number(jobLevel))) return '—';
+    return String(jobLevel);
+}
+
+function formatJobName(job) {
+    return job.JobName?.trim() || `Oficio #${job.TemplateId}`;
+}
+
+function buildJobsLines(jobs) {
+    if (!jobs.length) return 'Sin oficios registrados.';
+    const sorted = [...jobs].sort((a, b) => {
+        const levelA = Number.isFinite(Number(a.Level)) ? Number(a.Level) : -1;
+        const levelB = Number.isFinite(Number(b.Level)) ? Number(b.Level) : -1;
+        if (levelA !== levelB) {
+            return levelB - levelA;
+        }
+        return formatJobName(a).localeCompare(formatJobName(b), 'es');
+    });
+
+    return sorted.map((job) => `${formatJobName(job)}: ${formatJobLevel(job.Level)}`).join('\n');
+}
+
 function parseSerializedEffects(buffer) {
     if (!buffer) return [];
     try {
@@ -413,6 +457,10 @@ function buildProfileButtons(characterId, activeTab) {
             id: PROFILE_TABS.EQUIPMENT,
             label: 'Equipamiento',
         },
+        {
+            id: PROFILE_TABS.JOBS,
+            label: 'Oficios',
+        },
     ];
 
     const row = new ActionRowBuilder();
@@ -478,6 +526,9 @@ async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SU
         tab === PROFILE_TABS.STATS ? await fetchAlignmentLevel(worldPool, character.Honor) : null;
     const statsBlock =
         tab === PROFILE_TABS.STATS ? buildStatsBlock(character, alignmentLevel) : null;
+        const jobs =
+        tab === PROFILE_TABS.JOBS ? await loadCharacterJobs(worldPool, character.Id) : null;
+    const jobsLines = jobs ? buildJobsLines(jobs) : null;
 
     return {
         view: buildProfileView({
@@ -494,6 +545,7 @@ async function buildProfileData(ctx, worldPool, character, tab = PROFILE_TABS.SU
             equipmentSummary,
             equipmentDetails,
             statsBlock,
+            jobsLines,
             equipmentImage,
             tab,
         }),

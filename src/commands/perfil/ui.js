@@ -120,12 +120,20 @@ function buildStatsBlock(character, alignmentLevel) {
 function buildProfileButtons(characterId) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`perfil.btn:stats:${characterId}`)
-            .setLabel('Stats')
-            .setStyle(ButtonStyle.Primary),
+            .setCustomId(`perfil.tab:summary:${characterId}`)
+            .setLabel('Resumen')
+            .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-            .setCustomId(`perfil.btn:equip:${characterId}`)
+            .setCustomId(`perfil.tab:stats:${characterId}`)
+            .setLabel('Stats')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`perfil.tab:equipment:${characterId}`)
             .setLabel('Equipamiento')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`perfil.tab:jobs:${characterId}`)
+            .setLabel('Oficios')
             .setStyle(ButtonStyle.Secondary)
     );
 }
@@ -144,6 +152,7 @@ function buildProfileView({
     equipmentSummary,
     equipmentDetails,
     statsBlock,
+    jobsLines,
     equipmentImage,
     tab = 'summary',
 }) {
@@ -165,6 +174,10 @@ function buildProfileView({
         embed
             .setTitle(`${character.Name} (Nv. ${level})`)
             .setDescription(statsBlock ?? 'Sin estadísticas.');
+    } else if (tab === 'jobs') {
+        embed
+            .setTitle(`🛠️${character.Name}`)
+            .setDescription(jobsLines ?? 'Sin oficios registrados.');
     } else if (tab === 'equipment') {
         embed
             .setTitle(`${character.Name} (Nv. ${level})`)
