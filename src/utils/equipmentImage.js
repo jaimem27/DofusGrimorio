@@ -1,8 +1,4 @@
-const fs = require('fs');
-const path = require('path');
-
-const BASE_W = 539;
-const BASE_H = 520;
+const { readPng, writePng, resizeNearest, drawImage } = require('./png');
 
 const SLOT_POSITIONS = {
     0: { x: 35, y: 35, w: 62, h: 62 }, // Amuleto
@@ -21,22 +17,9 @@ const SLOT_POSITIONS = {
     13: { x: 382, y: 422, w: 62, h: 62 }, // Dofus 5
     14: { x: 451, y: 422, w: 62, h: 62 }, // Dofus 6
 };
-
-function resolveCanvasModule() {
-    const modulePath = path.resolve(__dirname, '..', '..', 'node_modules', '@napi-rs', 'canvas');
-    if (!fs.existsSync(modulePath)) return null;
-    return require('@napi-rs/canvas');
-}
-
 async function buildEquipmentImage({ basePath, equipmentBySlot, resolveIconPath }) {
-    const canvasModule = resolveCanvasModule();
-    if (!canvasModule) return null;
-    const { createCanvas, loadImage } = canvasModule;
-    const canvas = createCanvas(BASE_W, BASE_H);
-    const ctx = canvas.getContext('2d');
-
-    const base = await loadImage(basePath);
-    ctx.drawImage(base, 0, 0, BASE_W, BASE_H);
+    const base = readPng(basePath);
+    if (!base) return null;
 
     for (const [slotIdStr, pos] of Object.entries(SLOT_POSITIONS)) {
         const slotId = Number(slotIdStr);
@@ -46,16 +29,16 @@ async function buildEquipmentImage({ basePath, equipmentBySlot, resolveIconPath 
         const iconPath = resolveIconPath(it);
         if (!iconPath) continue;
 
-        const icon = await loadImage(iconPath);
-        ctx.drawImage(icon, pos.x, pos.y, pos.w, pos.h);
+        const icon = readPng(iconPath);
+        if (!icon) continue;
+        const resized = resizeNearest(icon, pos.w, pos.h);
+        drawImage(base, resized, pos.x, pos.y);
     }
 
-    return canvas.toBuffer('image/png');
+    return writePng(base);
 }
 
 module.exports = {
     buildEquipmentImage,
     SLOT_POSITIONS,
-    BASE_W,
-    BASE_H,
 };

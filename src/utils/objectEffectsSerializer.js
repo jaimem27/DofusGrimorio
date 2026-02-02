@@ -168,8 +168,20 @@ function formatDateParts(year, month, day, hour, minute) {
  * - Usa label bonito o fallback del JSON
  */
 function decorateEffect(effect) {
-    const label = getEffectLabel(effect.id, effect.type);
-    if (!label) return null;
+    const rawLabel = getEffectLabel(effect.id, effect.type);
+    if (!rawLabel) return null;
+    const isNegativeLabel = rawLabel.trim().startsWith('-');
+    const label = isNegativeLabel ? rawLabel.replace(/^-+\s*/, '').trim() : rawLabel;
+    const applyNegative = (value) => (isNegativeLabel && typeof value === 'number' ? -value : value);
+    const normalizeRange = (min, max) => {
+        if (typeof min !== 'number' || typeof max !== 'number') return { min, max };
+        const signedMin = applyNegative(min);
+        const signedMax = applyNegative(max);
+        return {
+            min: Math.min(signedMin, signedMax),
+            max: Math.max(signedMin, signedMax),
+        };
+    };
     const out = { ...effect, label, display: label };
 
     switch (effect.serializationId) {
@@ -187,13 +199,14 @@ function decorateEffect(effect) {
             if (a !== null && b !== null) {
                 const min = Math.min(a, b);
                 const max = Math.max(a, b);
-                out.display = `${label} ${formatRange(min, max)}`;
+                const range = normalizeRange(min, max);
+                out.display = `${label} ${formatRange(range.min, range.max)}`;
                 return out;
             }
 
             // fallback si algo raro
             if (typeof effect.value === 'number') {
-                out.display = `${label} ${formatSigned(effect.value)}`;
+                out.display = `${label} ${formatSigned(applyNegative(effect.value))}`;
             }
             return out;
         }
@@ -215,8 +228,8 @@ function decorateEffect(effect) {
 
         case 8: {
             // MinMax
-            // OJO: en readEffect lo guardamos como min/max correctamente
-            out.display = `${label} ${formatRange(effect.min, effect.max)}`;
+            const range = normalizeRange(effect.min, effect.max);
+            out.display = `${label} ${formatRange(range.min, range.max)}`;
             return out;
         }
 
@@ -228,7 +241,7 @@ function decorateEffect(effect) {
         default: {
             // Base / Unknown -> intenta mostrar value si existe
             if (typeof effect.value === 'number') {
-                out.display = `${label} ${formatSigned(effect.value)}`;
+                out.display = `${label} ${formatSigned(applyNegative(effect.value))}`;
             }
             return out;
         }
