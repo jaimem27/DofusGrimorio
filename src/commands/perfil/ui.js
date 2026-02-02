@@ -169,6 +169,7 @@ function buildProfileView({
         embed
             .setTitle(`🎒 Equipamiento de ${character.Name} (Nv. ${level})`)
             .addFields({
+                name: '📦 Equipamiento',
                 value: equipmentDetails || 'Sin equipamiento.',
                 inline: false,
             });

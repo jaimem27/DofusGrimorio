@@ -1,4 +1,4 @@
-const { buildProfileView, buildStatsView, buildEquipmentView, buildStatsBlock, buildItemStatsView } = require('./ui.js');
+const { buildProfileView, buildStatsBlock, buildItemStatsView } = require('./ui.js');
 const {
     ActionRowBuilder,
     StringSelectMenuBuilder,
@@ -265,27 +265,6 @@ function buildEquipmentStatsSelect(characterId, options) {
         .addOptions(options);
 
     return new ActionRowBuilder().addComponents(select);
-}
-
-function buildEquipmentActions(characterId, { includeStats = true } = {}) {
-    const row = new ActionRowBuilder();
-
-    if (includeStats) {
-        row.addComponents(
-            new ButtonBuilder()
-                .setCustomId(`perfil.btn:equipstats:${characterId}`)
-                .setLabel('📊 Ver stats')
-                .setStyle(ButtonStyle.Primary)
-        );
-    }
-    row.addComponents(
-        new ButtonBuilder()
-            .setCustomId(`perfil.btn:summary:${characterId}`)
-            .setLabel('⬅️ Volver')
-            .setStyle(ButtonStyle.Secondary)
-    );
-
-    return row;
 }
 
 async function buildEquipmentImageAttachment(equipmentBySlot) {
@@ -723,53 +702,52 @@ async function handlePerfilButton(interaction, ctx) {
     }
 
     if (action === 'stats') {
-        const alignmentLevel = await fetchAlignmentLevel(worldPool, character.Honor);
-        const statsBlock = buildStatsBlock(character, alignmentLevel);
-        const view = buildStatsView({
-            character,
-            level: Number(character.Level ?? 1),
-            statsBlock,
+        const { view } = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.STATS);
+        const buttons = buildProfileButtons(character.Id, PROFILE_TABS.STATS);
+        return interaction.editReply({
+            ...view,
+            components: [buttons],
+
         });
-        return interaction.editReply(view);
     }
+
 
     if (action === 'summary') {
         const { view } = await buildProfileData(ctx, worldPool, character, PROFILE_TABS.SUMMARY);
-        return interaction.editReply(view);
+        const buttons = buildProfileButtons(character.Id, PROFILE_TABS.SUMMARY);
+        return interaction.editReply({
+            ...view,
+            components: [buttons],
+        });
     }
 
     if (action === 'equip') {
-        const equippedItems = await loadEquippedItems(worldPool, character.Id);
-        const equipmentLines = buildEquipmentPreview(equippedItems);
-        const equipmentBySlot = buildEquipmentBySlot(equippedItems);
-        const equipmentImage = await buildEquipmentImageAttachment(equipmentBySlot);
-        const components = [buildEquipmentActions(character.Id)];
-        const view = buildEquipmentView({
+        const { view, extraComponents } = await buildProfileData(
+            ctx,
+            worldPool,
             character,
-            level: Number(character.Level ?? 1),
-            equipmentLines,
-            equipmentImage,
-            components,
+            PROFILE_TABS.EQUIPMENT
+        );
+        const buttons = buildProfileButtons(character.Id, PROFILE_TABS.EQUIPMENT);
+        return interaction.editReply({
+            ...view,
+            components: [...(extraComponents ?? []), buttons],
         });
-        return interaction.editReply(view);
     }
 
     if (action === 'equipstats') {
-        const equippedItems = await loadEquippedItems(worldPool, character.Id);
-        const equipmentLines = buildEquipmentPreview(equippedItems);
-        const equipmentBySlot = buildEquipmentBySlot(equippedItems);
-        const equipmentImage = await buildEquipmentImageAttachment(equipmentBySlot);
-        const options = buildEquippedSelectOptions(equippedItems);
-        const selectRow = buildEquipmentStatsSelect(character.Id, options);
-        const components = [selectRow, buildEquipmentActions(character.Id, { includeStats: false })];
-        const view = buildEquipmentView({
+        const { view, extraComponents } = await buildProfileData(
+            ctx,
+            worldPool,
             character,
-            level: Number(character.Level ?? 1),
-            equipmentLines,
-            equipmentImage,
-            components,
+            PROFILE_TABS.EQUIPMENT
+        );
+        const buttons = buildProfileButtons(character.Id, PROFILE_TABS.EQUIPMENT);
+        return interaction.editReply({
+            ...view,
+            components: [...(extraComponents ?? []), buttons],
         });
-        return interaction.editReply(view);
+
     }
 
     return interaction.editReply({
@@ -807,19 +785,16 @@ async function handleEquipmentSelect(interaction, ctx) {
                 components: [],
             });
         }
-        const equippedItems = await loadEquippedItems(worldPool, character.Id);
-        const equipmentLines = buildEquipmentPreview(equippedItems);
-        const equipmentBySlot = buildEquipmentBySlot(equippedItems);
-        const equipmentImage = await buildEquipmentImageAttachment(equipmentBySlot);
-        const components = [buildEquipmentActions(character.Id)];
-        const view = buildEquipmentView({
-            character,
-            level: Number(character.Level ?? 1),
-            equipmentLines,
-            equipmentImage,
-            components,
+        const { view, extraComponents } = await buildProfileData(
+            ctx,
+            worldPool,
+            PROFILE_TABS.EQUIPMENT
+        );
+        const buttons = buildProfileButtons(character.Id, PROFILE_TABS.EQUIPMENT);
+        return interaction.editReply({
+            ...view,
+            components: [...(extraComponents ?? []), buttons],
         });
-        return interaction.editReply(view);
     }
 
     const slotId = Number.parseInt(selection, 10);
@@ -854,18 +829,10 @@ async function handleEquipmentSelect(interaction, ctx) {
     const iconAttachment = iconPath
         ? new AttachmentBuilder(iconPath, { name: `item-${item.ItemId}.png` })
         : null;
-    const components = [
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`perfil.btn:equip:${character.Id}`)
-                .setLabel('⬅️ Equipamiento')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId(`perfil.btn:summary:${character.Id}`)
-                .setLabel('🏠 Perfil')
-                .setStyle(ButtonStyle.Secondary)
-        ),
-    ];
+    const options = buildEquippedSelectOptions(equippedItems);
+    const selectRow = buildEquipmentStatsSelect(character.Id, options);
+    const buttons = buildProfileButtons(character.Id, PROFILE_TABS.EQUIPMENT);
+    const components = [selectRow, buttons];
     const view = buildItemStatsView({
         character,
         item,
