@@ -42,17 +42,41 @@ async function fetchOnlinePlayers(db) {
     const worldPool = await db.getPool('world');
     if (!worldPool) return null;
 
-    const [rows] = await worldPool.query('SELECT COUNT(*) AS total FROM accounts WHERE ConnectedCharacter IS NOT NULL AND LastConnection > DATE_SUB(NOW(), INTERVAL 10 MINUTE)');
+    const windowMinutes = Number.parseInt(process.env.PRESENCE_ACTIVE_MINUTES || '5', 10);
+    const activeMinutes = Number.isFinite(windowMinutes) && windowMinutes > 0 ? windowMinutes : 60;
+    const [rows] = await worldPool.query(
+        `SELECT COUNT(*) AS total
+         FROM accounts a
+         LEFT JOIN world_maps_merchant wmm
+           ON wmm.CharacterId = a.ConnectedCharacter
+          AND wmm.AccountId = a.Id
+          AND wmm.IsActive = 1
+         WHERE a.ConnectedCharacter IS NOT NULL
+           AND a.LastConnection > DATE_SUB(NOW(), INTERVAL ? MINUTE)
+           AND wmm.CharacterId IS NULL`,
+        [activeMinutes]
+    );
     const total = rows?.[0]?.total ?? rows?.[0]?.['COUNT(*)'];
     return Number(total ?? 0);
+}
+
+async function fetchServerName(db) {
+    const worldPool = await db.getPool('world');
+    if (!worldPool) return null;
+
+    const [rows] = await worldPool.query('SELECT Name FROM worlds ORDER BY Id ASC LIMIT 1');
+    const name = rows?.[0]?.Name;
+    return typeof name === 'string' && name.trim() ? name.trim() : null;
 }
 
 async function updatePresence(db) {
     try {
         const onlinePlayers = await fetchOnlinePlayers(db);
+        const serverName = await fetchServerName(db);
+        const displayName = serverName || 'Dofus';
         const label = Number.isFinite(onlinePlayers)
-            ? `Dofus • ${onlinePlayers} jugadores online`
-            : 'Dofus • jugadores online';
+            ? `${displayName} • ${onlinePlayers} jugadores online`
+            : `${displayName} • jugadores online`;
 
         client.user.setPresence({
             status: 'online',
