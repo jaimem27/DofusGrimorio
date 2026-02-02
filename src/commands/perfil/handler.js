@@ -828,9 +828,10 @@ async function handleEquipmentSelect(interaction, ctx) {
     const slotName = EQUIPMENT_SLOTS[slotId] ?? `Pos ${slotId}`;
     const effects = parseSerializedEffects(item.SerializedEffects);
     const effectsLines = effects.length ? effects.map(formatEffect) : ['Sin efectos'];
-    const iconPath = resolveEquipmentIconPath(item.ItemId);
+    const iconLookupId = item.IconId ?? item.ItemId;
+    const iconPath = resolveEquipmentIconPath(iconLookupId, { slotId });
     const iconAttachment = iconPath
-        ? new AttachmentBuilder(iconPath, { name: `item-${item.ItemId}.png` })
+        ? new AttachmentBuilder(iconPath, { name: `item-${iconLookupId}.png` })
         : null;
     const options = buildEquippedSelectOptions(equippedItems);
     const selectRow = buildEquipmentStatsSelect(character.Id, options);
