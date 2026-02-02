@@ -14,6 +14,7 @@ const PROFILE_TABS = {
     SUMMARY: 'summary',
     STATS: 'stats',
     EQUIPMENT: 'equipment',
+    JOBS: 'jobs',
 };
 
 const SELECTS = {
@@ -146,8 +147,8 @@ async function loadCharacterJobs(pool, characterId) {
            ORDER BY e.Level DESC
            LIMIT 1) AS Level
         FROM characters_jobs cj
-        LEFT JOIN jobs j ON j.Id = cj.TemplateId
-        WHERE cj.AccountId = ?;
+        LEFT JOIN jobs_templates j ON j.Id = cj.TemplateId
+        WHERE cj.CharacterId = ?;
         `,
         [characterId]
     );
@@ -163,18 +164,78 @@ function formatJobName(job) {
     return job.JobName?.trim() || `Oficio #${job.TemplateId}`;
 }
 
+function normalizeJobName(name) {
+    return name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+}
+
 function buildJobsLines(jobs) {
     if (!jobs.length) return 'Sin oficios registrados.';
-    const sorted = [...jobs].sort((a, b) => {
-        const levelA = Number.isFinite(Number(a.Level)) ? Number(a.Level) : -1;
-        const levelB = Number.isFinite(Number(b.Level)) ? Number(b.Level) : -1;
-        if (levelA !== levelB) {
-            return levelB - levelA;
+    const jobDisplayOverrides = new Map([['forjamago', 'Forjamago de Armas']]);
+    const groups = [
+        {
+            id: 'gathering',
+            title: '🌾 **Recolección**',
+            jobs: ['cazador', 'lenador', 'campesino', 'pescador', 'minero'],
+        },
+        {
+            id: 'maging',
+            title: '🧪 **Forjamagos**',
+            jobs: ['joyeromago', 'sastremago', 'zapateromago', 'fabricamago', 'escultomago', 'forjamago'],
+        },
+        {
+            id: 'crafting',
+            title: '🔨 **Artesanos**',
+            jobs: ['sastre', 'joyero', 'zapatero', 'herrero', 'alquimista', 'escultor', 'fabricante', 'manitas'],
+        },
+    ];
+
+    const groupedJobs = new Map(groups.map((group) => [group.id, []]));
+    const others = [];
+
+    jobs.forEach((job) => {
+        const name = formatJobName(job);
+        const normalized = normalizeJobName(name);
+        const displayName = jobDisplayOverrides.get(normalized) ?? name;
+        const entry = {
+            name: displayName,
+            level: formatJobLevel(job.Level),
+            sortLevel: Number.isFinite(Number(job.Level)) ? Number(job.Level) : -1,
+            normalized,
+        };
+        const group = groups.find((groupItem) => groupItem.jobs.includes(normalized));
+        if (group) {
+            groupedJobs.get(group.id).push(entry);
+        } else {
+            others.push(entry);
         }
-        return formatJobName(a).localeCompare(formatJobName(b), 'es');
     });
 
-    return sorted.map((job) => `${formatJobName(job)}: ${formatJobLevel(job.Level)}`).join('\n');
+    const compareEntries = (a, b) => {
+        if (a.sortLevel !== b.sortLevel) {
+            return b.sortLevel - a.sortLevel;
+        }
+        return a.name.localeCompare(b.name, 'es');
+    };
+
+    const sections = [];
+
+    groups.forEach((group) => {
+        const entries = groupedJobs.get(group.id).sort(compareEntries);
+        if (!entries.length) return;
+        sections.push(group.title);
+        sections.push(entries.map((entry) => `• ${entry.name}: ${entry.level}`).join('\n'));
+    });
+
+    if (others.length) {
+        sections.push('✨ Otros');
+        sections.push(others.sort(compareEntries).map((entry) => `• ${entry.name}: ${entry.level}`).join('\n'));
+    }
+
+    return sections.join('\n\n');
 }
 
 function parseSerializedEffects(buffer) {

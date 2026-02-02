@@ -176,7 +176,7 @@ function buildProfileView({
             .setDescription(statsBlock ?? 'Sin estadísticas.');
     } else if (tab === 'jobs') {
         embed
-            .setTitle(`🛠️${character.Name}`)
+            .setTitle(`🛠️ Oficios — ${character.Name}`)
             .setDescription(jobsLines ?? 'Sin oficios registrados.');
     } else if (tab === 'equipment') {
         embed
