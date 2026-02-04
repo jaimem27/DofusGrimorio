@@ -435,9 +435,10 @@ async function createAccounts(pool, discordUserId, payload) {
                     IsJailed,
                     IsBanned,
                     Tokens,
-                    NewTokens
+                    NewTokens,
+                    CreationDate
                 )
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
                 [
                     login,
                     passwordHash,

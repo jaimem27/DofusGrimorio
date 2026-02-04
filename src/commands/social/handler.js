@@ -3,8 +3,8 @@ const { IDS } = require('./ui.js');
 const VOTE_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 
 function getVoteReward() {
-    const reward = Number.parseInt(process.env.VOTE_TOKEN_REWARD || '1', 10);
-    return Number.isFinite(reward) && reward > 0 ? reward : 1;
+    const reward = Number.parseInt(process.env.VOTE_TOKEN_REWARD || '20', 10);
+    return Number.isFinite(reward) && reward > 0 ? reward : 20;
 }
 
 function formatRemaining(ms) {
@@ -68,7 +68,7 @@ async function handleVote(interaction, ctx) {
     const accountId = voteAccount.account_id;
     const reward = getVoteReward();
     await authPool.query(
-        `UPDATE accounts SET Tokens = Tokens + ?, LastVote = NOW() WHERE Id = ?`,
+        `UPDATE accounts SET Tokens = Tokens + ? WHERE Id = ?`,
         [reward, accountId]
     );
     await authPool.query(
