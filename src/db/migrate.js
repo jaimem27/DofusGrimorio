@@ -42,8 +42,18 @@ const AUTH_TABLE_QUERIES = [
   ) ENGINE = MyISAM
   DEFAULT CHARSET = utf8
   COLLATE = utf8_general_ci;
-`
-  ,
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS dg_redeem_claims (
+    redeem_code_id int(11) NOT NULL,
+    account_id int(11) NOT NULL,
+    claimed_at datetime NOT NULL DEFAULT current_timestamp(),
+    PRIMARY KEY (redeem_code_id, account_id),
+    KEY idx_account (account_id)
+  ) ENGINE = MyISAM
+  DEFAULT CHARSET = utf8
+  COLLATE = utf8_general_ci;
+ `,
   `
   CREATE TABLE IF NOT EXISTS dg_create_draft (
     discord_user_id VARCHAR(32) NOT NULL,

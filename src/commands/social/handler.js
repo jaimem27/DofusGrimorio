@@ -92,12 +92,21 @@ function normalizeCode(value) {
     return String(value ?? '').trim();
 }
 
-function parseItemIds(raw) {
+function parseItemEntries(raw) {
     if (!raw) return [];
     return String(raw)
         .split(',')
-        .map((entry) => Number.parseInt(entry.trim(), 10))
-        .filter((entry) => Number.isFinite(entry) && entry > 0);
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => {
+            const [rawId, rawQty] = entry.split(';').map((value) => value.trim());
+            const id = Number.parseInt(rawId, 10);
+            const quantity = rawQty ? Number.parseInt(rawQty, 10) : 1;
+            if (!Number.isFinite(id) || id <= 0) return null;
+            if (!Number.isFinite(quantity) || quantity <= 0) return null;
+            return { id, quantity };
+        })
+        .filter(Boolean);
 }
 
 async function loadRedeemCode(authPool, code) {
@@ -124,38 +133,49 @@ async function loadItemTemplates(worldPool, itemIds) {
     if (!itemIds.length) return new Map();
     const placeholders = itemIds.map(() => '?').join(',');
     const [templateRows] = await worldPool.query(
-        `SELECT Id, PossibleEffectsBin FROM items_templates WHERE Id IN (${placeholders})`,
+        `SELECT Id, PossibleEffectsBin, Name FROM items_templates WHERE Id IN (${placeholders})`,
         itemIds
     );
     const [weaponRows] = await worldPool.query(
-        `SELECT Id, PossibleEffectsBin FROM items_templates_weapons WHERE Id IN (${placeholders})`,
+        `SELECT Id, PossibleEffectsBin, Name FROM items_templates_weapons WHERE Id IN (${placeholders})`,
         itemIds
     );
     const map = new Map();
     [...templateRows, ...weaponRows].forEach((row) => {
-        if (!map.has(row.Id)) {
-            map.set(row.Id, row.PossibleEffectsBin ?? null);
+        const current = map.get(row.Id);
+        const entry = {
+            effects: row.PossibleEffectsBin ?? null,
+            name: row.Name ?? null,
+        };
+        if (!current || (!current.name && entry.name)) {
+            map.set(row.Id, entry);
         }
     });
     return map;
 }
 
-async function createBankItems(worldPool, accountId, itemIds, effectsMap) {
+async function createBankItems(worldPool, accountId, itemEntries, templateMap) {
     const [rows] = await worldPool.query(
         'SELECT MAX(Id) AS maxId FROM accounts_items_bank'
     );
     let nextId = Number(rows?.[0]?.maxId) || 0;
     const inserts = [];
+    const granted = [];
 
-    itemIds.forEach((itemId) => {
+    itemEntries.forEach(({ id, quantity }) => {
         nextId += 1;
         inserts.push([
             accountId,
             nextId,
-            itemId,
-            1,
-            effectsMap.get(itemId) ?? null,
+            id,
+            quantity,
+            templateMap.get(id)?.effects ?? null,
         ]);
+        granted.push({
+            id,
+            quantity,
+            name: templateMap.get(id)?.name ?? null,
+        });
     });
 
     for (const row of inserts) {
@@ -165,7 +185,15 @@ async function createBankItems(worldPool, accountId, itemIds, effectsMap) {
         );
     }
 
-    return inserts.length;
+    return granted;
+}
+
+async function hasRedeemedCode(authPool, redeemId, accountId) {
+    const [rows] = await authPool.query(
+        `SELECT 1 FROM dg_redeem_claims WHERE redeem_code_id = ? AND account_id = ? LIMIT 1`,
+        [redeemId, accountId]
+    );
+    return rows.length > 0;
 }
 
 async function handleVote(interaction, ctx) {
@@ -318,42 +346,53 @@ async function handleRedeemModal(interaction, ctx) {
     const usedAttempts = Number(redeem.used_attempts);
     const maxAttempts = Number(redeem.max_attempts);
 
-    if (usedAttempts === -1 && !redeem.expires_at) {
-        return interaction.editReply('🔴 Este código no tiene fecha de expiración configurada.');
-    }
-
     if (isExpired(redeem.expires_at)) {
         return interaction.editReply('🔴 Este código ya expiró.');
     }
 
-    if (usedAttempts !== -1 && Number.isFinite(maxAttempts) && usedAttempts >= maxAttempts) {
+    if (maxAttempts !== -1 && Number.isFinite(maxAttempts) && usedAttempts >= maxAttempts) {
         return interaction.editReply('🔴 Este código ya fue reclamado todas las veces posibles.');
     }
 
-    const itemIds = parseItemIds(redeem.items);
-    if (!itemIds.length) {
+    if (await hasRedeemedCode(authPool, redeem.id, accountId)) {
+        return interaction.editReply('🔴 Esta cuenta ya reclamó este código anteriormente.');
+    }
+
+    const itemEntries = parseItemEntries(redeem.items);
+    if (!itemEntries.length) {
         return interaction.editReply('🔴 Este código no tiene items configurados.');
     }
 
-    const effectsMap = await loadItemTemplates(worldPool, itemIds);
-    const missingItems = itemIds.filter((id) => !effectsMap.has(id));
+    const itemIds = itemEntries.map((entry) => entry.id);
+    const templateMap = await loadItemTemplates(worldPool, itemIds);
+    const missingItems = itemIds.filter((id) => !templateMap.has(id));
     if (missingItems.length) {
         return interaction.editReply(
             `🔴 No encontré plantillas para los items: ${missingItems.join(', ')}.`
         );
     }
 
-    const granted = await createBankItems(worldPool, accountId, itemIds, effectsMap);
+    const granted = await createBankItems(worldPool, accountId, itemEntries, templateMap);
 
-    if (usedAttempts !== -1) {
+    if (maxAttempts !== -1 && usedAttempts !== -1) {
         await authPool.query(
             'UPDATE dg_redeem_codes SET used_attempts = used_attempts + 1 WHERE id = ?',
             [redeem.id]
         );
     }
 
+    await authPool.query(
+        'INSERT INTO dg_redeem_claims (redeem_code_id, account_id) VALUES (?, ?)',
+        [redeem.id, accountId]
+    );
+
+    const itemLines = granted.map((item) => {
+        const name = item.name?.trim() || `Item #${item.id}`;
+        return `• ${name} x${item.quantity}`;
+    });
+
     return interaction.editReply(
-        `✅ Código canjeado. Se entregaron ${granted} item${granted === 1 ? '' : 's'} en el banco.`
+        `✅ Código canjeado. Recibiste:\n${itemLines.join('\n')}`
     );
 }
 
