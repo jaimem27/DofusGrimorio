@@ -16,11 +16,13 @@ async function main() {
   const instalar = require('./instalar.js');
   const cuentas = require('./cuentas.js');
   const perfil = require('./perfil.js');
+  const social = require('./social.js');
 
   const commands = [
     instalar.data.toJSON(),
     cuentas.data.toJSON(),
     perfil.data.toJSON(),
+    social.data.toJSON(),
   ];
 
   const rest = new REST({ version: '10' }).setToken(token);

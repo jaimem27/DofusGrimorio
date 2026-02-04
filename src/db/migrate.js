@@ -15,6 +15,7 @@ const AUTH_TABLE_QUERIES = [
     character_id INT(11) NOT NULL,
     is_main TINYINT(1) NOT NULL DEFAULT 0,
     linked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_vote DATETIME DEFAULT NULL,
     PRIMARY KEY (discord_user_id, character_id)
   ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
   `,

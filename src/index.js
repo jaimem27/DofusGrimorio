@@ -9,6 +9,7 @@ const { loadBootstrapConfig } = require('./db/bootstrap.js');
 const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
 const { handleAccountsButton, handleAccountsModal, handleAccountsSelect } = require('./commands/cuentas/handler.js');
 const { handlePerfilSelect, handlePerfilTabButton, handlePerfilButton } = require('./commands/perfil/handler.js');
+const { handleSocialButton } = require('./commands/social/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
 
 
@@ -153,9 +154,32 @@ async function bootstrap() {
                 return;
             }
 
+            if (interaction.isChatInputCommand() && interaction.commandName === 'social') {
+                if (!isAdmin(interaction)) {
+                    return interaction.reply({
+                        content: 'No tienes permisos de administrador para usar este comando.',
+                        ephemeral: true,
+                    });
+                }
+
+                await interaction.deferReply();
+
+                const { buildSocialView } = require('./commands/social/ui.js');
+                const view = buildSocialView();
+                const msg = await interaction.editReply(view);
+
+                ctx.socialPanelId = msg.id;
+                ctx.socialPanelChannelId = interaction.channelId;
+                return;
+            }
+
             if (interaction.isChatInputCommand() && interaction.commandName === 'perfil') {
                 const perfil = require('./commands/perfil.js');
                 return perfil.execute(interaction, ctx);
+            }
+
+            if (interaction.isButton() && interaction.customId.startsWith('social:')) {
+                return handleSocialButton(interaction, ctx);
             }
 
             if (interaction.isButton() && interaction.customId.startsWith('dg:install:')) {
