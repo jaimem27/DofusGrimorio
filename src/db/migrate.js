@@ -36,6 +36,7 @@ const AUTH_TABLE_QUERIES = [
     used_attempts int(11) NOT NULL DEFAULT 0,
     expires_at datetime DEFAULT NULL,
     created_at datetime NOT NULL DEFAULT current_timestamp(),
+    items varchar(255) NOT NULL,
     PRIMARY KEY(id),
     UNIQUE KEY uq_code (code)
   ) ENGINE = MyISAM
