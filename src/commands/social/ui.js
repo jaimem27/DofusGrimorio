@@ -2,7 +2,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 
 const IDS = {
     BTN_VOTE: 'social:vote',
-    BTN_RANKINGS: 'social:rankings',
+    BTN_REDEEM: 'social:redeem',
     BTN_COMMUNITY: 'social:community',
 };
 
@@ -20,7 +20,7 @@ function buildSocialEmbed() {
             value: [
                 '```',
                 '🗳️ Votar y reclamar tokens',
-                '🏆 Rankings (próximamente)',
+                '🎁 Reclamar código',
                 '🌐 Comunidad (próximamente)',
                 '```',
             ].join('\n'),
@@ -37,11 +37,10 @@ function buildSocialButtons() {
             .setEmoji('🗳️')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-            .setCustomId(IDS.BTN_RANKINGS)
-            .setLabel('Rankings')
-            .setEmoji('🏆')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(true),
+            .setCustomId(IDS.BTN_REDEEM)
+            .setLabel('Reclamar código')
+            .setEmoji('🎁')
+            .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
             .setCustomId(IDS.BTN_COMMUNITY)
             .setLabel('Comunidad')

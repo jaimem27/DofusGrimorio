@@ -9,7 +9,11 @@ const { loadBootstrapConfig } = require('./db/bootstrap.js');
 const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
 const { handleAccountsButton, handleAccountsModal, handleAccountsSelect } = require('./commands/cuentas/handler.js');
 const { handlePerfilSelect, handlePerfilTabButton, handlePerfilButton } = require('./commands/perfil/handler.js');
-const { handleSocialButton } = require('./commands/social/handler.js');
+const {
+    handleSocialButton,
+    handleSocialSelect,
+    handleSocialModal,
+} = require('./commands/social/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
 
 
@@ -202,8 +206,16 @@ async function bootstrap() {
                 return handleAccountsModal(interaction, ctx);
             }
 
+            if (interaction.isModalSubmit() && interaction.customId.startsWith('social.modal:')) {
+                return handleSocialModal(interaction, ctx);
+            }
+
             if (interaction.isStringSelectMenu() && interaction.customId.startsWith('acc')) {
                 return handleAccountsSelect(interaction, ctx);
+            }
+
+            if (interaction.isStringSelectMenu() && interaction.customId.startsWith('social:')) {
+                return handleSocialSelect(interaction, ctx);
             }
 
             if (interaction.isStringSelectMenu() && interaction.customId.startsWith('perfil')) {
