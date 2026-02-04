@@ -4,6 +4,7 @@ const AUTH_TABLE_QUERIES = [
     discord_user_id VARCHAR(32) NOT NULL,
     account_id INT(11) NOT NULL,
     linked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_vote DATETIME DEFAULT NULL,
     PRIMARY KEY (discord_user_id, account_id),
     UNIQUE KEY uq_account_owner (account_id)
   ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
@@ -26,6 +27,21 @@ const AUTH_TABLE_QUERIES = [
     KEY idx_user_time (discord_user_id, created_at)
   ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
   `,
+  `
+  CREATE TABLE IF NOT EXISTS dg_redeem_codes (
+    id int(11) NOT NULL AUTO_INCREMENT,
+    code varchar(64) NOT NULL,
+    max_attempts int(11) NOT NULL DEFAULT 1,
+    used_attempts int(11) NOT NULL DEFAULT 0,
+    expires_at datetime DEFAULT NULL,
+    created_at datetime NOT NULL DEFAULT current_timestamp(),
+    PRIMARY KEY(id),
+    UNIQUE KEY uq_code (code)
+  ) ENGINE = MyISAM
+  DEFAULT CHARSET = utf8
+  COLLATE = utf8_general_ci;
+`
+  ,
   `
   CREATE TABLE IF NOT EXISTS dg_create_draft (
     discord_user_id VARCHAR(32) NOT NULL,
