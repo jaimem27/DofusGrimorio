@@ -12,7 +12,6 @@ function buildSocialEmbed() {
         .setDescription(
             [
                 'Participa en la comunidad y consigue recompensas.',
-                'Los botones con candado se activarán en próximas fases.',
             ].join('\n')
         )
         .addFields({
@@ -21,7 +20,7 @@ function buildSocialEmbed() {
                 '```',
                 '🗳️ Votar y reclamar tokens',
                 '🎁 Reclamar código',
-                '🔎 Buscar crafteador',
+                '🔎 Buscar oficio',
                 '```',
             ].join('\n'),
         })
@@ -43,7 +42,7 @@ function buildSocialButtons() {
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
             .setCustomId(IDS.BTN_JOBS)
-            .setLabel('Buscar crafteador')
+            .setLabel('Buscar oficio')
             .setEmoji('🔎')
             .setStyle(ButtonStyle.Primary),
     );
