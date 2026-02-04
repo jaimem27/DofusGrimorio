@@ -3,7 +3,6 @@ const {
     ButtonBuilder,
     ButtonStyle,
     EmbedBuilder,
-    PermissionFlagsBits,
     StringSelectMenuBuilder,
     ModalBuilder,
     TextInputBuilder,
@@ -12,6 +11,7 @@ const {
 const { IDS } = require('./ui.js');
 
 const VOTE_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+const BASE_JOB_ID = 1;
 const SELECTS = {
     REDEEM_ACCOUNT: 'social:redeem:account',
     JOBS: 'social:jobs:select',
@@ -28,7 +28,6 @@ const INPUTS = {
 
 const JOB_ACTIONS = {
     TOGGLE_ONLINE: 'toggle_online',
-    TOGGLE_MENTIONS: 'toggle_mentions',
     CHANGE_FILTERS: 'change_filters',
     CHANGE_JOB: 'change_job',
 };
@@ -140,15 +139,6 @@ function parseItemEntries(raw) {
         .filter(Boolean);
 }
 
-function isStaff(interaction) {
-    const perms = interaction.memberPermissions;
-    if (!perms) return false;
-    return (
-        perms.has(PermissionFlagsBits.Administrator) ||
-        perms.has(PermissionFlagsBits.ManageGuild)
-    );
-}
-
 function normalizeJobName(name) {
     return String(name ?? '')
         .toLowerCase()
@@ -174,21 +164,27 @@ async function loadJobTemplates(worldPool) {
         `
         SELECT Id, Name
         FROM jobs_templates
+        WHERE Id <> ?
         ORDER BY Name ASC
-        `
+        `,
+        [BASE_JOB_ID]
     );
     return rows ?? [];
 }
 
 async function loadJobTemplate(worldPool, jobId) {
+    if (Number(jobId) === BASE_JOB_ID) {
+        return null;
+    }
     const [rows] = await worldPool.query(
         `
         SELECT Id, Name
         FROM jobs_templates
         WHERE Id = ?
+        AND Id <> ?
         LIMIT 1
         `,
-        [jobId]
+        [jobId, BASE_JOB_ID]
     );
     return rows?.[0] ?? null;
 }
@@ -239,12 +235,11 @@ function serializeJobState(state) {
     const minLevel = safeState.minLevel ?? 0;
     const maxLevel = safeState.maxLevel ?? DEFAULT_MAX_LEVEL;
     const onlyOnline = safeState.onlyOnline ? 1 : 0;
-    const mentionMode = safeState.mentionMode ? 1 : 0;
-    return `${jobId}:${minLevel}:${maxLevel}:${onlyOnline}:${mentionMode}`;
+    return `${jobId}:${minLevel}:${maxLevel}:${onlyOnline}`;
 }
 
 function parseJobState(parts) {
-    const [jobId, minLevel, maxLevel, onlyOnline, mentionMode] = parts.map((value) =>
+    const [jobId, minLevel, maxLevel, onlyOnline] = parts.map((value) =>
         Number.parseInt(value, 10)
     );
     return {
@@ -252,7 +247,6 @@ function parseJobState(parts) {
         minLevel: Number.isFinite(minLevel) ? minLevel : null,
         maxLevel: Number.isFinite(maxLevel) ? maxLevel : DEFAULT_MAX_LEVEL,
         onlyOnline: onlyOnline === 1,
-        mentionMode: mentionMode === 1,
     };
 }
 
@@ -339,33 +333,11 @@ async function loadJobCrafters(worldPool, jobId, minLevel, maxLevel, onlyOnline)
     return results.map((row) => ({ ...row, IsOnline: true }));
 }
 
-async function loadDiscordLinks(authPool, accountIds) {
-    if (!authPool || !accountIds.length) return new Map();
-    const placeholders = accountIds.map(() => '?').join(',');
-    const [rows] = await authPool.query(
-        `
-        SELECT account_id, discord_user_id
-        FROM dg_discord_account
-        WHERE account_id IN (${placeholders})
-        `,
-        accountIds
-    );
-    const map = new Map();
-    (rows ?? []).forEach((row) => {
-        map.set(Number(row.account_id), row.discord_user_id);
-    });
-    return map;
-}
-
-function buildCrafterLines(results, jobName, mentionMode, mentionsMap) {
+function buildCrafterLines(results, jobName) {
     if (!results.length) return ['No se encontraron jugadores con ese rango.'];
     return results.map((row) => {
         const level = Number.isFinite(Number(row.JobLevel)) ? Number(row.JobLevel) : '—';
-        const accountId = Number(row.AccountId);
-        const discordId = mentionsMap.get(accountId);
-        const label =
-            mentionMode && discordId ? `<@${discordId}>` : row.CharacterName || 'Jugador';
-        return `• ${label} — ${jobName} ${level}`;
+        return `• ${row.CharacterName || 'Jugador'} — ${jobName} ${level}`;
     });
 }
 
@@ -387,12 +359,6 @@ function buildJobsResultButtons(state) {
         .setEmoji('🟢')
         .setStyle(state.onlyOnline ? ButtonStyle.Success : ButtonStyle.Secondary);
 
-    const toggleMentions = new ButtonBuilder()
-        .setCustomId(`social:jobs:action:${JOB_ACTIONS.TOGGLE_MENTIONS}:${serializeJobState(state)}`)
-        .setLabel(`Mencionar: ${state.mentionMode ? 'ON' : 'OFF'}`)
-        .setEmoji('🔔')
-        .setStyle(state.mentionMode ? ButtonStyle.Success : ButtonStyle.Secondary);
-
     const changeFilters = new ButtonBuilder()
         .setCustomId(`social:jobs:action:${JOB_ACTIONS.CHANGE_FILTERS}:${serializeJobState(state)}`)
         .setLabel('Cambiar filtros')
@@ -405,12 +371,7 @@ function buildJobsResultButtons(state) {
         .setEmoji('🛠️')
         .setStyle(ButtonStyle.Secondary);
 
-    return new ActionRowBuilder().addComponents(
-        toggleOnline,
-        toggleMentions,
-        changeFilters,
-        changeJob
-    );
+    return new ActionRowBuilder().addComponents(toggleOnline, changeFilters, changeJob);
 }
 
 async function loadRedeemCode(authPool, code) {
@@ -642,6 +603,14 @@ async function handleRedeemModal(interaction, ctx) {
         return interaction.editReply('🔴 Acceso denegado.');
     }
 
+    const [worldAccountRows] = await worldPool.query(
+        'SELECT Id FROM accounts WHERE Id = ? LIMIT 1',
+        [accountId]
+    );
+    if (!worldAccountRows.length) {
+        return interaction.editReply('🔴 No encontré esa cuenta en WORLD.');
+    }
+
     const redeem = await loadRedeemCode(authPool, code);
     if (!redeem) {
         return interaction.editReply('🔴 Código inválido o inexistente.');
@@ -740,7 +709,7 @@ async function handleJobsSelect(interaction, ctx) {
     }
 
     const jobId = Number.parseInt(interaction.values?.[0], 10);
-    if (!Number.isFinite(jobId)) {
+    if (!Number.isFinite(jobId) || jobId === BASE_JOB_ID) {
         return interaction.reply({
             ephemeral: true,
             content: 'Selección inválida.',
@@ -755,7 +724,6 @@ async function handleJobsSelect(interaction, ctx) {
             minLevel: null,
             maxLevel: DEFAULT_MAX_LEVEL,
             onlyOnline: false,
-            mentionMode: isStaff(interaction),
         },
         jobName
     );
@@ -765,16 +733,15 @@ async function handleJobsSelect(interaction, ctx) {
 async function handleJobsModal(interaction, ctx) {
     await interaction.deferReply({ ephemeral: true });
     const worldPool = await ctx.db.getPool('world');
-    const authPool = await ctx.db.getPool('auth');
-    if (!worldPool || !authPool) {
+    if (!worldPool) {
         return interaction.editReply(
-            'Configura primero las bases de datos AUTH y WORLD con `/instalar`.'
+            'Configura primero la base de datos WORLD con `/instalar`.'
         );
     }
 
     const stateParts = interaction.customId.split(':').slice(2);
     const state = parseJobState(stateParts);
-    if (!Number.isFinite(state.jobId)) {
+    if (!Number.isFinite(state.jobId) || state.jobId === BASE_JOB_ID) {
         return interaction.editReply('Oficio inválido.');
     }
 
@@ -801,7 +768,6 @@ async function handleJobsModal(interaction, ctx) {
         minLevel,
         maxLevel,
         onlyOnline: state.onlyOnline,
-        mentionMode: state.mentionMode,
     };
 
     const results = await loadJobCrafters(
@@ -814,9 +780,7 @@ async function handleJobsModal(interaction, ctx) {
 
     const trimmed = results.slice(0, 20);
     const hasMore = results.length > 20;
-    const accountIds = trimmed.map((row) => Number(row.AccountId)).filter(Boolean);
-    const mentionsMap = await loadDiscordLinks(authPool, accountIds);
-    const lines = buildCrafterLines(trimmed, jobName, nextState.mentionMode, mentionsMap);
+    const lines = buildCrafterLines(trimmed, jobName);
     const embed = buildJobsResultsEmbed(jobName, minLevel, maxLevel, lines, hasMore);
     const buttons = buildJobsResultButtons(nextState);
 
@@ -831,7 +795,7 @@ async function handleJobsAction(interaction, ctx) {
     const parts = interaction.customId.split(':');
     const action = parts[3];
     const state = parseJobState(parts.slice(4));
-    if (!Number.isFinite(state.jobId)) {
+    if (!Number.isFinite(state.jobId) || state.jobId === BASE_JOB_ID) {
         return interaction.reply({ ephemeral: true, content: 'Oficio inválido.' });
     }
 
@@ -874,11 +838,10 @@ async function handleJobsAction(interaction, ctx) {
     }
 
     const worldPool = await ctx.db.getPool('world');
-    const authPool = await ctx.db.getPool('auth');
-    if (!worldPool || !authPool) {
+    if (!worldPool) {
         return interaction.reply({
             ephemeral: true,
-            content: 'Configura primero las bases de datos AUTH y WORLD con `/instalar`.',
+            content: 'Configura primero la base de datos WORLD con `/instalar`.',
         });
     }
 
@@ -886,8 +849,6 @@ async function handleJobsAction(interaction, ctx) {
         ...state,
         onlyOnline:
             action === JOB_ACTIONS.TOGGLE_ONLINE ? !state.onlyOnline : state.onlyOnline,
-        mentionMode:
-            action === JOB_ACTIONS.TOGGLE_MENTIONS ? !state.mentionMode : state.mentionMode,
     };
 
     const job = await loadJobTemplate(worldPool, nextState.jobId);
@@ -901,9 +862,7 @@ async function handleJobsAction(interaction, ctx) {
     );
     const trimmed = results.slice(0, 20);
     const hasMore = results.length > 20;
-    const accountIds = trimmed.map((row) => Number(row.AccountId)).filter(Boolean);
-    const mentionsMap = await loadDiscordLinks(authPool, accountIds);
-    const lines = buildCrafterLines(trimmed, jobName, nextState.mentionMode, mentionsMap);
+    const lines = buildCrafterLines(trimmed, jobName);
     const embed = buildJobsResultsEmbed(
         jobName,
         nextState.minLevel,
