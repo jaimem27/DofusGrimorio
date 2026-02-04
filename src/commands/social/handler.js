@@ -1,5 +1,9 @@
 const {
     ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
+    PermissionFlagsBits,
     StringSelectMenuBuilder,
     ModalBuilder,
     TextInputBuilder,
@@ -10,13 +14,40 @@ const { IDS } = require('./ui.js');
 const VOTE_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const SELECTS = {
     REDEEM_ACCOUNT: 'social:redeem:account',
+    JOBS: 'social:jobs:select',
 };
 const MODALS = {
     REDEEM_CODE: 'social.modal:redeem',
+    JOBS: 'social.modal:jobs',
 };
 const INPUTS = {
     REDEEM_CODE: 'social.input:redeem.code',
+    JOB_MIN: 'social.input:jobs.min',
+    JOB_MAX: 'social.input:jobs.max',
 };
+
+const JOB_ACTIONS = {
+    TOGGLE_ONLINE: 'toggle_online',
+    TOGGLE_MENTIONS: 'toggle_mentions',
+    CHANGE_FILTERS: 'change_filters',
+    CHANGE_JOB: 'change_job',
+};
+const JOB_GROUPS = [
+    {
+        emoji: '🌾',
+        jobs: ['cazador', 'lenador', 'campesino', 'pescador', 'minero'],
+    },
+    {
+        emoji: '🧪',
+        jobs: ['joyeromago', 'sastremago', 'zapateromago', 'fabricamago', 'escultomago', 'forjamago'],
+    },
+    {
+        emoji: '🔨',
+        jobs: ['sastre', 'joyero', 'zapatero', 'herrero', 'alquimista', 'escultor', 'fabricante', 'manitas'],
+    },
+];
+const DEFAULT_MAX_LEVEL = 200;
+const DEFAULT_ACTIVE_MINUTES = 5;
 
 function getVoteReward() {
     const reward = Number.parseInt(process.env.VOTE_TOKEN_REWARD || '20', 10);
@@ -107,6 +138,279 @@ function parseItemEntries(raw) {
             return { id, quantity };
         })
         .filter(Boolean);
+}
+
+function isStaff(interaction) {
+    const perms = interaction.memberPermissions;
+    if (!perms) return false;
+    return (
+        perms.has(PermissionFlagsBits.Administrator) ||
+        perms.has(PermissionFlagsBits.ManageGuild)
+    );
+}
+
+function normalizeJobName(name) {
+    return String(name ?? '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+}
+
+function getJobEmoji(jobName) {
+    const normalized = normalizeJobName(jobName);
+    const group = JOB_GROUPS.find((entry) => entry.jobs.includes(normalized));
+    return group?.emoji ?? '';
+}
+
+function formatJobOptionLabel(job) {
+    const name = job.Name?.trim() || `Oficio #${job.Id}`;
+    const emoji = getJobEmoji(name);
+    return emoji ? `${emoji} ${name}` : name;
+}
+
+async function loadJobTemplates(worldPool) {
+    const [rows] = await worldPool.query(
+        `
+        SELECT Id, Name
+        FROM jobs_templates
+        ORDER BY Name ASC
+        `
+    );
+    return rows ?? [];
+}
+
+async function loadJobTemplate(worldPool, jobId) {
+    const [rows] = await worldPool.query(
+        `
+        SELECT Id, Name
+        FROM jobs_templates
+        WHERE Id = ?
+        LIMIT 1
+        `,
+        [jobId]
+    );
+    return rows?.[0] ?? null;
+}
+
+function buildJobsSelect(options) {
+    const select = new StringSelectMenuBuilder()
+        .setCustomId(SELECTS.JOBS)
+        .setPlaceholder('Elige un oficio')
+        .addOptions(options);
+
+    return new ActionRowBuilder().addComponents(select);
+}
+
+function buildJobsModal(state, jobName) {
+    const minInput = new TextInputBuilder()
+        .setCustomId(INPUTS.JOB_MIN)
+        .setLabel('Nivel mínimo')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setPlaceholder('1–200');
+
+    const maxInput = new TextInputBuilder()
+        .setCustomId(INPUTS.JOB_MAX)
+        .setLabel('Nivel máximo')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder(String(DEFAULT_MAX_LEVEL));
+
+    if (state?.minLevel) {
+        minInput.setValue(String(state.minLevel));
+    }
+    if (Number.isFinite(state?.maxLevel)) {
+        maxInput.setValue(String(state.maxLevel));
+    }
+
+    return new ModalBuilder()
+        .setCustomId(`${MODALS.JOBS}:${serializeJobState(state)}`)
+        .setTitle(`Filtros — ${jobName}`)
+        .addComponents(
+            new ActionRowBuilder().addComponents(minInput),
+            new ActionRowBuilder().addComponents(maxInput)
+        );
+}
+
+function serializeJobState(state) {
+    const safeState = state || {};
+    const jobId = safeState.jobId ?? 0;
+    const minLevel = safeState.minLevel ?? 0;
+    const maxLevel = safeState.maxLevel ?? DEFAULT_MAX_LEVEL;
+    const onlyOnline = safeState.onlyOnline ? 1 : 0;
+    const mentionMode = safeState.mentionMode ? 1 : 0;
+    return `${jobId}:${minLevel}:${maxLevel}:${onlyOnline}:${mentionMode}`;
+}
+
+function parseJobState(parts) {
+    const [jobId, minLevel, maxLevel, onlyOnline, mentionMode] = parts.map((value) =>
+        Number.parseInt(value, 10)
+    );
+    return {
+        jobId: Number.isFinite(jobId) ? jobId : null,
+        minLevel: Number.isFinite(minLevel) ? minLevel : null,
+        maxLevel: Number.isFinite(maxLevel) ? maxLevel : DEFAULT_MAX_LEVEL,
+        onlyOnline: onlyOnline === 1,
+        mentionMode: mentionMode === 1,
+    };
+}
+
+function parseLevelInput(raw, fallback = null) {
+    const value = Number.parseInt(String(raw ?? '').trim(), 10);
+    if (!Number.isFinite(value)) return fallback;
+    return value;
+}
+
+function clampLevel(value) {
+    if (!Number.isFinite(value)) return null;
+    return Math.min(200, Math.max(1, value));
+}
+
+function resolveActiveMinutes() {
+    const windowMinutes = Number.parseInt(process.env.PRESENCE_ACTIVE_MINUTES || '', 10);
+    return Number.isFinite(windowMinutes) && windowMinutes > 0
+        ? windowMinutes
+        : DEFAULT_ACTIVE_MINUTES;
+}
+
+function isCharacterOnline(row, activeMinutes) {
+    if (!row?.ConnectedCharacter) return false;
+    if (Number(row.ConnectedCharacter) !== Number(row.CharacterId)) return false;
+    if (row.MerchantCharacter) return false;
+    const last = new Date(row.LastConnection);
+    if (!Number.isFinite(last.getTime())) return false;
+    const elapsed = Date.now() - last.getTime();
+    return elapsed <= activeMinutes * 60 * 1000;
+}
+
+async function loadJobCrafters(worldPool, jobId, minLevel, maxLevel, onlyOnline) {
+    const activeMinutes = resolveActiveMinutes();
+    const onlineClause = onlyOnline
+        ? `
+          AND a.ConnectedCharacter = c.Id
+          AND a.LastConnection > DATE_SUB(NOW(), INTERVAL ? MINUTE)
+          AND wmm.CharacterId IS NULL
+        `
+        : '';
+    const params = [jobId];
+    if (onlyOnline) params.push(activeMinutes);
+    params.push(minLevel, maxLevel);
+
+    const [rows] = await worldPool.query(
+        `
+        SELECT
+          c.Id AS CharacterId,
+          c.Name AS CharacterName,
+          c.AccountId,
+          j.Name AS JobName,
+          (SELECT e.Level
+           FROM experiences e
+           WHERE e.JobExp <= cj.Experience
+           ORDER BY e.Level DESC
+           LIMIT 1) AS JobLevel,
+          a.ConnectedCharacter,
+          a.LastConnection,
+          wmm.CharacterId AS MerchantCharacter
+        FROM characters_jobs cj
+        INNER JOIN characters c ON c.Id = cj.CharacterId AND c.DeletedDate IS NULL 
+        LEFT JOIN jobs_templates j ON j.Id = cj.TemplateId
+        LEFT JOIN accounts a ON a.Id = c.AccountId
+        LEFT JOIN world_maps_merchant wmm
+          ON wmm.CharacterId = c.Id
+          AND wmm.AccountId = c.AccountId
+          AND wmm.IsActive = 1
+        WHERE cj.TemplateId = ?
+        ${onlineClause}
+        HAVING JobLevel BETWEEN ? AND ?
+        ORDER BY JobLevel DESC, c.Name ASC
+        LIMIT 21;
+        `,
+        params
+    );
+
+    const results = rows ?? [];
+    if (!onlyOnline) {
+        return results.map((row) => ({
+            ...row,
+            IsOnline: isCharacterOnline(row, activeMinutes),
+        }));
+    }
+    return results.map((row) => ({ ...row, IsOnline: true }));
+}
+
+async function loadDiscordLinks(authPool, accountIds) {
+    if (!authPool || !accountIds.length) return new Map();
+    const placeholders = accountIds.map(() => '?').join(',');
+    const [rows] = await authPool.query(
+        `
+        SELECT account_id, discord_user_id
+        FROM dg_discord_account
+        WHERE account_id IN (${placeholders})
+        `,
+        accountIds
+    );
+    const map = new Map();
+    (rows ?? []).forEach((row) => {
+        map.set(Number(row.account_id), row.discord_user_id);
+    });
+    return map;
+}
+
+function buildCrafterLines(results, jobName, mentionMode, mentionsMap) {
+    if (!results.length) return ['No se encontraron jugadores con ese rango.'];
+    return results.map((row) => {
+        const level = Number.isFinite(Number(row.JobLevel)) ? Number(row.JobLevel) : '—';
+        const accountId = Number(row.AccountId);
+        const discordId = mentionsMap.get(accountId);
+        const label =
+            mentionMode && discordId ? `<@${discordId}>` : row.CharacterName || 'Jugador';
+        return `• ${label} — ${jobName} ${level}`;
+    });
+}
+
+function buildJobsResultsEmbed(jobName, minLevel, maxLevel, lines, moreCount) {
+    const title = `🔨 Resultados — ${jobName} (min ${minLevel}, max ${maxLevel})`;
+    const description = moreCount
+        ? `${lines.join('\n')}\n\n… y más resultados.`
+        : lines.join('\n');
+    return new EmbedBuilder()
+        .setTitle(title)
+        .setDescription(description)
+        .setColor(0x2f3136);
+}
+
+function buildJobsResultButtons(state) {
+    const toggleOnline = new ButtonBuilder()
+        .setCustomId(`social:jobs:action:${JOB_ACTIONS.TOGGLE_ONLINE}:${serializeJobState(state)}`)
+        .setLabel(`Solo conectados: ${state.onlyOnline ? 'ON' : 'OFF'}`)
+        .setEmoji('🟢')
+        .setStyle(state.onlyOnline ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+    const toggleMentions = new ButtonBuilder()
+        .setCustomId(`social:jobs:action:${JOB_ACTIONS.TOGGLE_MENTIONS}:${serializeJobState(state)}`)
+        .setLabel(`Mencionar: ${state.mentionMode ? 'ON' : 'OFF'}`)
+        .setEmoji('🔔')
+        .setStyle(state.mentionMode ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+    const changeFilters = new ButtonBuilder()
+        .setCustomId(`social:jobs:action:${JOB_ACTIONS.CHANGE_FILTERS}:${serializeJobState(state)}`)
+        .setLabel('Cambiar filtros')
+        .setEmoji('🔁')
+        .setStyle(ButtonStyle.Primary);
+
+    const changeJob = new ButtonBuilder()
+        .setCustomId(`social:jobs:action:${JOB_ACTIONS.CHANGE_JOB}:${serializeJobState(state)}`)
+        .setLabel('Cambiar oficio')
+        .setEmoji('🛠️')
+        .setStyle(ButtonStyle.Secondary);
+
+    return new ActionRowBuilder().addComponents(
+        toggleOnline,
+        toggleMentions,
+        changeFilters,
+        changeJob
+    );
 }
 
 async function loadRedeemCode(authPool, code) {
@@ -396,12 +700,238 @@ async function handleRedeemModal(interaction, ctx) {
     );
 }
 
+async function handleJobsButton(interaction, ctx) {
+    const worldPool = await ctx.db.getPool('world');
+    if (!worldPool) {
+        return interaction.reply({
+            ephemeral: true,
+            content: 'Configura primero la base de datos WORLD con `/instalar`.',
+        });
+    }
+
+    const jobs = await loadJobTemplates(worldPool);
+    if (!jobs.length) {
+        return interaction.reply({
+            ephemeral: true,
+            content: 'No encontré oficios en la base de datos.',
+        });
+    }
+
+    const options = jobs.map((job) => ({
+        label: formatJobOptionLabel(job),
+        value: String(job.Id),
+    }));
+
+    const selectRow = buildJobsSelect(options);
+    return interaction.reply({
+        ephemeral: true,
+        content: '🔎 **Buscar crafteador**\nElige el oficio que necesitas:',
+        components: [selectRow],
+    });
+}
+
+async function handleJobsSelect(interaction, ctx) {
+    const worldPool = await ctx.db.getPool('world');
+    if (!worldPool) {
+        return interaction.reply({
+            ephemeral: true,
+            content: 'Configura primero la base de datos WORLD con `/instalar`.',
+        });
+    }
+
+    const jobId = Number.parseInt(interaction.values?.[0], 10);
+    if (!Number.isFinite(jobId)) {
+        return interaction.reply({
+            ephemeral: true,
+            content: 'Selección inválida.',
+        });
+    }
+
+    const job = await loadJobTemplate(worldPool, jobId);
+    const jobName = job?.Name?.trim() || `Oficio #${jobId}`;
+    const modal = buildJobsModal(
+        {
+            jobId,
+            minLevel: null,
+            maxLevel: DEFAULT_MAX_LEVEL,
+            onlyOnline: false,
+            mentionMode: isStaff(interaction),
+        },
+        jobName
+    );
+    return interaction.showModal(modal);
+}
+
+async function handleJobsModal(interaction, ctx) {
+    await interaction.deferReply({ ephemeral: true });
+    const worldPool = await ctx.db.getPool('world');
+    const authPool = await ctx.db.getPool('auth');
+    if (!worldPool || !authPool) {
+        return interaction.editReply(
+            'Configura primero las bases de datos AUTH y WORLD con `/instalar`.'
+        );
+    }
+
+    const stateParts = interaction.customId.split(':').slice(2);
+    const state = parseJobState(stateParts);
+    if (!Number.isFinite(state.jobId)) {
+        return interaction.editReply('Oficio inválido.');
+    }
+
+    const minRaw = interaction.fields.getTextInputValue(INPUTS.JOB_MIN);
+    const maxRaw = interaction.fields.getTextInputValue(INPUTS.JOB_MAX);
+    const minLevel = clampLevel(parseLevelInput(minRaw));
+    const maxLevel = clampLevel(parseLevelInput(maxRaw, DEFAULT_MAX_LEVEL));
+
+    if (!Number.isFinite(minLevel)) {
+        return interaction.editReply('🔴 Ingresa un nivel mínimo válido.');
+    }
+    if (!Number.isFinite(maxLevel)) {
+        return interaction.editReply('🔴 Ingresa un nivel máximo válido.');
+    }
+    if (minLevel > maxLevel) {
+        return interaction.editReply('🔴 El nivel mínimo no puede ser mayor al máximo.');
+    }
+
+    const job = await loadJobTemplate(worldPool, state.jobId);
+    const jobName = job?.Name?.trim() || `Oficio #${state.jobId}`;
+
+    const nextState = {
+        jobId: state.jobId,
+        minLevel,
+        maxLevel,
+        onlyOnline: state.onlyOnline,
+        mentionMode: state.mentionMode,
+    };
+
+    const results = await loadJobCrafters(
+        worldPool,
+        state.jobId,
+        minLevel,
+        maxLevel,
+        state.onlyOnline
+    );
+
+    const trimmed = results.slice(0, 20);
+    const hasMore = results.length > 20;
+    const accountIds = trimmed.map((row) => Number(row.AccountId)).filter(Boolean);
+    const mentionsMap = await loadDiscordLinks(authPool, accountIds);
+    const lines = buildCrafterLines(trimmed, jobName, nextState.mentionMode, mentionsMap);
+    const embed = buildJobsResultsEmbed(jobName, minLevel, maxLevel, lines, hasMore);
+    const buttons = buildJobsResultButtons(nextState);
+
+    return interaction.editReply({
+        embeds: [embed],
+        components: [buttons],
+        allowedMentions: { parse: [] },
+    });
+}
+
+async function handleJobsAction(interaction, ctx) {
+    const parts = interaction.customId.split(':');
+    const action = parts[3];
+    const state = parseJobState(parts.slice(4));
+    if (!Number.isFinite(state.jobId)) {
+        return interaction.reply({ ephemeral: true, content: 'Oficio inválido.' });
+    }
+
+    if (action === JOB_ACTIONS.CHANGE_JOB) {
+        const worldPool = await ctx.db.getPool('world');
+        if (!worldPool) {
+            return interaction.reply({
+                ephemeral: true,
+                content: 'Configura primero la base de datos WORLD con `/instalar`.',
+            });
+        }
+
+        const jobs = await loadJobTemplates(worldPool);
+        const options = jobs.map((job) => ({
+            label: formatJobOptionLabel(job),
+            value: String(job.Id),
+        }));
+        const selectRow = buildJobsSelect(options);
+        return interaction.update({
+            content: '🔎 **Buscar crafteador**\nElige el oficio que necesitas:',
+            embeds: [],
+            components: [selectRow],
+            allowedMentions: { parse: [] },
+        });
+    }
+
+    if (action === JOB_ACTIONS.CHANGE_FILTERS) {
+        const worldPool = await ctx.db.getPool('world');
+        if (!worldPool) {
+            return interaction.reply({
+                ephemeral: true,
+                content: 'Configura primero la base de datos WORLD con `/instalar`.',
+            });
+        }
+
+        const job = await loadJobTemplate(worldPool, state.jobId);
+        const jobName = job?.Name?.trim() || `Oficio #${state.jobId}`;
+        const modal = buildJobsModal(state, jobName);
+        return interaction.showModal(modal);
+    }
+
+    const worldPool = await ctx.db.getPool('world');
+    const authPool = await ctx.db.getPool('auth');
+    if (!worldPool || !authPool) {
+        return interaction.reply({
+            ephemeral: true,
+            content: 'Configura primero las bases de datos AUTH y WORLD con `/instalar`.',
+        });
+    }
+
+    const nextState = {
+        ...state,
+        onlyOnline:
+            action === JOB_ACTIONS.TOGGLE_ONLINE ? !state.onlyOnline : state.onlyOnline,
+        mentionMode:
+            action === JOB_ACTIONS.TOGGLE_MENTIONS ? !state.mentionMode : state.mentionMode,
+    };
+
+    const job = await loadJobTemplate(worldPool, nextState.jobId);
+    const jobName = job?.Name?.trim() || `Oficio #${nextState.jobId}`;
+    const results = await loadJobCrafters(
+        worldPool,
+        nextState.jobId,
+        nextState.minLevel,
+        nextState.maxLevel,
+        nextState.onlyOnline
+    );
+    const trimmed = results.slice(0, 20);
+    const hasMore = results.length > 20;
+    const accountIds = trimmed.map((row) => Number(row.AccountId)).filter(Boolean);
+    const mentionsMap = await loadDiscordLinks(authPool, accountIds);
+    const lines = buildCrafterLines(trimmed, jobName, nextState.mentionMode, mentionsMap);
+    const embed = buildJobsResultsEmbed(
+        jobName,
+        nextState.minLevel,
+        nextState.maxLevel,
+        lines,
+        hasMore
+    );
+    const buttons = buildJobsResultButtons(nextState);
+
+    return interaction.update({
+        embeds: [embed],
+        components: [buttons],
+        allowedMentions: { parse: [] },
+    });
+}
+
 async function handleSocialButton(interaction, ctx) {
     if (interaction.customId === IDS.BTN_VOTE) {
         return handleVote(interaction, ctx);
     }
     if (interaction.customId === IDS.BTN_REDEEM) {
         return handleRedeem(interaction, ctx);
+    }
+    if (interaction.customId === IDS.BTN_JOBS) {
+        return handleJobsButton(interaction, ctx);
+    }
+    if (interaction.customId.startsWith('social:jobs:action:')) {
+        return handleJobsAction(interaction, ctx);
     }
     return undefined;
 }
@@ -410,12 +940,18 @@ async function handleSocialSelect(interaction, ctx) {
     if (interaction.customId === SELECTS.REDEEM_ACCOUNT) {
         return handleRedeemAccountSelect(interaction, ctx);
     }
+    if (interaction.customId === SELECTS.JOBS) {
+        return handleJobsSelect(interaction, ctx);
+    }
     return undefined;
 }
 
 async function handleSocialModal(interaction, ctx) {
     if (interaction.customId.startsWith(MODALS.REDEEM_CODE)) {
         return handleRedeemModal(interaction, ctx);
+    }
+    if (interaction.customId.startsWith(MODALS.JOBS)) {
+        return handleJobsModal(interaction, ctx);
     }
     return undefined;
 }

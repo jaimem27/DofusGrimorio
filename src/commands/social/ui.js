@@ -3,7 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const IDS = {
     BTN_VOTE: 'social:vote',
     BTN_REDEEM: 'social:redeem',
-    BTN_COMMUNITY: 'social:community',
+    BTN_JOBS: 'social:jobs',
 };
 
 function buildSocialEmbed() {
@@ -21,7 +21,7 @@ function buildSocialEmbed() {
                 '```',
                 '🗳️ Votar y reclamar tokens',
                 '🎁 Reclamar código',
-                '🌐 Comunidad (próximamente)',
+                '🔎 Buscar crafteador',
                 '```',
             ].join('\n'),
         })
@@ -42,11 +42,10 @@ function buildSocialButtons() {
             .setEmoji('🎁')
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
-            .setCustomId(IDS.BTN_COMMUNITY)
-            .setLabel('Comunidad')
-            .setEmoji('🌐')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(true)
+            .setCustomId(IDS.BTN_JOBS)
+            .setLabel('Buscar crafteador')
+            .setEmoji('🔎')
+            .setStyle(ButtonStyle.Primary),
     );
 }
 
