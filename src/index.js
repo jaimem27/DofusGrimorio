@@ -9,6 +9,7 @@ const { loadBootstrapConfig } = require('./db/bootstrap.js');
 const { handleInstallButton, handleInstallModal, loadInstallState } = require('./commands/instalar/handler.js');
 const { handleAccountsButton, handleAccountsModal, handleAccountsSelect } = require('./commands/cuentas/handler.js');
 const { handlePerfilSelect, handlePerfilTabButton, handlePerfilButton } = require('./commands/perfil/handler.js');
+const { handleRankingButton, handleRankingSelect } = require('./commands/ranking/handler.js');
 const {
     handleSocialButton,
     handleSocialSelect,
@@ -182,6 +183,11 @@ async function bootstrap() {
                 return perfil.execute(interaction, ctx);
             }
 
+            if (interaction.isChatInputCommand() && interaction.commandName === 'ranking') {
+                const ranking = require('./commands/ranking.js');
+                return ranking.execute(interaction, ctx);
+            }
+
             if (interaction.isButton() && interaction.customId.startsWith('social:')) {
                 return handleSocialButton(interaction, ctx);
             }
@@ -196,6 +202,10 @@ async function bootstrap() {
 
             if (interaction.isButton() && interaction.customId.startsWith('perfil.btn:')) {
                 return handlePerfilButton(interaction, ctx);
+            }
+
+            if (interaction.isButton() && interaction.customId.startsWith('ranking:')) {
+                return handleRankingButton(interaction, ctx);
             }
 
             if (interaction.isModalSubmit() && interaction.customId.startsWith('dg:modal:')) {
@@ -220,6 +230,10 @@ async function bootstrap() {
 
             if (interaction.isStringSelectMenu() && interaction.customId.startsWith('perfil')) {
                 return handlePerfilSelect(interaction, ctx);
+            }
+
+            if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ranking:')) {
+                return handleRankingSelect(interaction, ctx);
             }
 
             if (interaction.isButton() && interaction.customId.startsWith('perfil.tab:')) {
