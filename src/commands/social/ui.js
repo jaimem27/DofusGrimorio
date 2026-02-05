@@ -11,7 +11,8 @@ function buildSocialEmbed() {
         .setTitle('🤝 Centro social')
         .setDescription(
             [
-                'Participa en la comunidad y consigue recompensas.',
+                'Participa en la comunidad, apoya el servidor y obtén recompensas.\n',
+                'Aquí encontrarás las funciones sociales disponibles del Grimorio.',
             ].join('\n')
         )
         .addFields({

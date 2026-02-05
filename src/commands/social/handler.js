@@ -394,27 +394,46 @@ function isExpired(expiresAt) {
     return Date.now() > expiresDate.getTime();
 }
 
+async function loadSerializedEffects(worldPool, itemIds) {
+    if (!itemIds.length) return new Map();
+    const placeholders = itemIds.map(() => '?').join(',');
+    const [characterRows] = await worldPool.query(
+        `SELECT ItemId, SerializedEffects FROM characters_items WHERE ItemId IN (${placeholders}) ORDER BY Id DESC`,
+        itemIds
+    );
+    const [bankRows] = await worldPool.query(
+        `SELECT ItemId, SerializedEffects FROM accounts_items_bank WHERE ItemId IN (${placeholders}) ORDER BY Id DESC`,
+        itemIds
+    );
+    const map = new Map();
+    [...characterRows, ...bankRows].forEach((row) => {
+        if (!map.has(row.ItemId) && row.SerializedEffects) {
+            map.set(row.ItemId, row.SerializedEffects);
+        }
+    });
+    return map;
+}
+
 async function loadItemTemplates(worldPool, itemIds) {
     if (!itemIds.length) return new Map();
     const placeholders = itemIds.map(() => '?').join(',');
     const [templateRows] = await worldPool.query(
-        `SELECT Id, PossibleEffectsBin, Name FROM items_templates WHERE Id IN (${placeholders})`,
+        `SELECT Id, Name FROM items_templates WHERE Id IN (${placeholders})`,
         itemIds
     );
     const [weaponRows] = await worldPool.query(
-        `SELECT Id, PossibleEffectsBin, Name FROM items_templates_weapons WHERE Id IN (${placeholders})`,
+        `SELECT Id, Name FROM items_templates_weapons WHERE Id IN (${placeholders})`,
         itemIds
     );
-    const map = new Map();
+    const effectsMap = await loadSerializedEffects(worldPool, itemIds);
+    const map = new Map(itemIds.map((id) => [id, { effects: null, name: null }]));
     [...templateRows, ...weaponRows].forEach((row) => {
-        const current = map.get(row.Id);
-        const entry = {
-            effects: row.PossibleEffectsBin ?? null,
-            name: row.Name ?? null,
-        };
-        if (!current || (!current.name && entry.name)) {
-            map.set(row.Id, entry);
-        }
+        const current = map.get(row.Id) || { effects: null, name: null };
+        map.set(row.Id, { ...current, name: row.Name ?? current.name });
+    });
+    effectsMap.forEach((effects, itemId) => {
+        const current = map.get(itemId) || { effects: null, name: null };
+        map.set(itemId, { ...current, effects });
     });
     return map;
 }
@@ -428,13 +447,14 @@ async function createBankItems(worldPool, accountId, itemEntries, templateMap) {
     const granted = [];
 
     itemEntries.forEach(({ id, quantity }) => {
+        const serializedEffects = templateMap.get(id)?.effects;
         nextId += 1;
         inserts.push([
             accountId,
             nextId,
             id,
             quantity,
-            templateMap.get(id)?.effects ?? null,
+            Buffer.isBuffer(serializedEffects) ? serializedEffects : Buffer.alloc(0),
         ]);
         granted.push({
             id,
@@ -604,11 +624,24 @@ async function handleRedeemModal(interaction, ctx) {
     }
 
     const [worldAccountRows] = await worldPool.query(
-        'SELECT Id FROM accounts WHERE Id = ? LIMIT 1',
+        `
+        SELECT a.Id
+        FROM accounts a
+        WHERE a.Id = ?
+          AND EXISTS (
+              SELECT 1
+              FROM characters c
+              WHERE c.AccountId = a.Id
+              LIMIT 1
+          )
+        LIMIT 1
+        `,
         [accountId]
     );
     if (!worldAccountRows.length) {
-        return interaction.editReply('🔴 No encontré esa cuenta en WORLD.');
+        return interaction.editReply(
+            '🔴 Esta cuenta no tiene personajes en WORLD. Entra al juego con ella antes de reclamar.'
+        );
     }
 
     const redeem = await loadRedeemCode(authPool, code);
