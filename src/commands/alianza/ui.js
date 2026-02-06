@@ -20,14 +20,10 @@ async function buildAlliancePayload({ alliance, guildsCount }) {
         .setTitle(`🤝 Alianza: ${alliance.Name}`)
         .setColor(0x2f3136)
         .addFields(
-            { name: 'Etiqueta', value: alliance.Tag ? `[${alliance.Tag}]` : '—', inline: true },
+            { name: 'Etiqueta', value: alliance.Tag ? `${alliance.Tag}` : '—', inline: true },
             { name: 'Gremios', value: formatNumber(guildsCount), inline: true },
             { name: 'Creada', value: formatDate(alliance.CreationDate), inline: true }
         );
-
-    if (alliance.MotdContent) {
-        embed.setDescription(`**Mensaje del día**\n${alliance.MotdContent}`);
-    }
 
     const emblemBuffer = await buildEmblemBuffer({
         backgroundFolder: 'backalliance',
