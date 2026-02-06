@@ -188,6 +188,16 @@ async function bootstrap() {
                 return ranking.execute(interaction, ctx);
             }
 
+            if (interaction.isChatInputCommand() && interaction.commandName === 'gremio') {
+                const gremio = require('./commands/gremio.js');
+                return gremio.execute(interaction, ctx);
+            }
+
+            if (interaction.isChatInputCommand() && interaction.commandName === 'alianza') {
+                const alianza = require('./commands/alianza.js');
+                return alianza.execute(interaction, ctx);
+            }
+
             if (interaction.isButton() && interaction.customId.startsWith('social:')) {
                 return handleSocialButton(interaction, ctx);
             }

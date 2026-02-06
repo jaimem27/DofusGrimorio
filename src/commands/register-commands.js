@@ -18,6 +18,8 @@ async function main() {
   const perfil = require('./perfil.js');
   const social = require('./social.js');
   const ranking = require('./ranking.js');
+  const gremio = require('./gremio.js');
+  const alianza = require('./alianza.js');
 
   const commands = [
     instalar.data.toJSON(),
@@ -25,6 +27,8 @@ async function main() {
     perfil.data.toJSON(),
     social.data.toJSON(),
     ranking.data.toJSON(),
+    gremio.data.toJSON(),
+    alianza.data.toJSON(),
   ];
 
   const rest = new REST({ version: '10' }).setToken(token);
