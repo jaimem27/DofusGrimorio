@@ -1,5 +1,9 @@
 @echo off
+setlocal EnableExtensions
 title Discord Commands Sync
+
+REM Ir al directorio donde vive este bat (src\commands)
+cd /d "%~dp0"
 
 echo ===============================
 echo  LIMPIANDO comandos del guild
@@ -30,4 +34,8 @@ echo.
 echo ===============================
 echo  ✔ COMANDOS SINCRONIZADOS
 echo ===============================
+pause
+endlocal
+exit /b 0
+
 pause

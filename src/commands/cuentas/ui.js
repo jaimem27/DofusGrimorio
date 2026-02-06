@@ -24,7 +24,6 @@ function buildAccountsEmbed() {
                     '✅ Crear cuenta(s)     (1–8 por usuario)',
                     '🔑 Cambiar contraseña  ',
                     '🧰 Desbuguear pj       ',
-                    '🆘 Ayuda               (guía rápida)',
                     '```',
                 ].join('\n'),
             },

@@ -1,170 +1,89 @@
-# 📘 Dofus Grimorio
+# Dofus Grimorio
 
-### El grimorio del servidor
+Bot de gestión para servidores privados de Dofus 2.X+.  
+Conecta la base de datos del servidor con Discord para mostrar información útil
+a jugadores y staff de forma automática.
 
-> Un sistema **auto-hosteado** que conecta Discord con tu servidor Dofus 2.X.  
-> Cuentas, personajes, gremios, rankings y más — **todo desde Discord**.
+## ✨ Características
 
----
+- Conexión a la base de datos del servidor
+- Perfiles de personajes, gremios y alianzas
+- Rankings del servidor (nivel, honor, gremios, logros)
+- Sistema de códigos y votos
+- Buscador de oficios
+- Logs del HDV del servidor
+- Creación y gestión básica de cuentas
+- Jugando a ... -> Se convierte a jugadores online
 
-## ✨ ¿Qué es Dofus Grimorio? ✨
+## ✨ Comandos
 
-**DofusGrimorio** es un proyecto **open-source** diseñado para **reemplazar y ampliar**
-las funciones habituales de una web de servidor Dofus, llevándolas directamente a **Discord**.
+- /instalar -> Panel para configurar la conexión a las BD y los logs de HDV (Solo admin)
+- /social -> Panel donde pueden votar, canjear codigos (solo recursos,ogrinas o consumibles) y buscar oficios (como los libros) (solo admin)
+- /cuentas -> Panel donde se pueden crear cuentas, cambiar la contraseña y desbugear personajes (solo admin)
+- /perfil -> Muestra los stats, equipamiento, estadisticas y información de personajes
+- /ranking -> Muestra ranking de nivel, gremios, honor y logros, pudiendose filtrar por clase
+- /alianza -> Muestra información de esa alianza
+- /gremio -> Muestra información sobre ese gremio
+- /about -> Muestra información del bot
 
-El objetivo es reducir el peso de la web y pasarlo al **Discord** como foco principal.
+## 🧰 Requisitos
 
----
+- Node.js 18 o superior
+- MySQL / MariaDB
+- Un servidor privado de Dofus 2.X+
+- Acceso a la base de datos del servidor
+- Un bot de Discord con los permisos necesarios
 
-## 🧭 Cómo se usa DofusGrimorio
+## 🚀 Instalación
 
-DofusGrimorio es un proyecto **público y open-source**, pensado para que **cualquier servidor Discord**
-pueda utilizarlo **ejecutando su propia instancia**.
+1. Clona el repositorio:
+   ```bash
+   git clone https://github.com/jaimem27/dofusGrimorio.git
 
-El flujo de uso es el siguiente:
+   ```
+2. Configura el entorno:
+   ```Abre el .env.example -> rellenamos valores y lo guardamos como .env
 
-1️⃣ **Clonas el proyecto**  
-Cada servidor descarga el código y ejecuta su propia instancia del bot.
+   ```
+3. Ejecutar el instaldor:
+   - En Windows, haz doble clic en setup.bat
+   - El script instalará las dependencias necesarias
+   - Los comandos de Discord se registrarán automáticamente
+4. Inicia el bot:
+   ```Ejecuta start.cmd
 
-2️⃣ **Creas tu propia aplicación de Discord**  
-Cada instancia utiliza **su propio token** y puede tener el nombre y apariencia que desees.
+   ```
 
-3️⃣ **Configuras el entorno**  
-Defines las variables necesarias (`.env`) y la conexión a la base de datos del juego.
+Si prefieres un acceso directo en Windows, puedes usar `setup.bat` para iniciar el proyecto después de configurar el `.env`.
 
-4️⃣ **Arrancas el bot**  
-El bot se ejecuta de forma local o en tu servidor (VPS, máquina propia, etc.).
+## ⚙️ Configuración
 
-5️⃣ **Instalas la instancia en Discord**  
-Dentro del servidor Discord ejecutas: `/instalar`
+El archivo `.env.example` contiene la configuración principal del bot y sirve como referencia para todas las opciones disponibles.
 
-Este paso inicializa el Grimorio:
-- bloquea la instancia a ese servidor Discord
-- detecta las capacidades del servidor Dofus
-- prepara la base de datos interna del bot
-- activa solo las funcionalidades compatibles
+## 🕹️ Uso
 
-6️⃣ **Empiezas a usar el Grimorio**  
-A partir de ese momento, el servidor puede:
-- crear y vincular cuentas
-- consultar personajes y perfiles
-- acceder a rankings
-- gestionar gremios, mercado, votos y extras (según soporte)
+- Usa `/instalar` para configurar el bot en tu servidor
+- Comandos disponibles para gremios, alianzas y perfiles
+- El bot se sincroniza automáticamente con la base de datos del servidor
 
-> 🔍 **Importante**  
-> DofusGrimorio no es un bot centralizado ni un servicio compartido.
->  
-> El proyecto es público, pero **cada servidor Discord ejecuta su propia instancia del bot**,
-> con su propio token y su propia configuración.
+## 🔌 Compatibilidad
 
----
+Dofus Grimorio depende de la estructura de la base de datos del servidor.
+Algunas funcionalidades pueden no estar disponibles si el servidor no soporta determinadas tablas o sistemas.
 
-## 🧠 Cómo funciona 🧠
+## 💬 Contacto
 
-Cada instancia del bot:
+Para dudas, reportar errores o sugerencias relacionadas con el proyecto:
 
-- 🔒 Es **auto-hosteada**
-- 🔑 Usa **su propio token**
-- 🏠 Diseñado para uso **dedicado**
-- 🧩 Puede adaptarse a **distintas tablas de base de datos del juego**
+- Discord: **Shine#0005**
+- Servidor Discord (Dutyfree Emulación): https://discord.gg/8DAhv7tvxt
+- Repositorio del proyecto (issues y sugerencias)
 
----
+## ⚠️ Aviso legal
 
-## 🧭 Filosofía del proyecto 🧭
+Proyecto no oficial para servidores privados de Dofus.
+No afiliado, respaldado ni aprobado por Ankama Games.
 
-- 🔐 **Single-tenant**  
-  Una instancia = un servidor
+## 📄 Licencia
 
-- 🛠️ **Self-hosted**  
-  Tú controlas el bot y los datos
-
-- 🧩 **Extensible**  
-  Core estable + providers adaptables
-
-- 📜 **Transparente**  
-  Sin telemetría, sin servicios externos obligatorios
-
----
-
-## 🚀 Funcionalidades principales 🚀
-
-### 🔐 Cuentas y vinculación
-- Creación de cuentas desde Discord
-- Vinculación Discord ↔ cuenta / personajes
-- Soporte para **multicuenta** (hasta 8 cuentas)
-- Gestión básica de seguridad 
-
-### 👤 Personajes y perfiles
-- Perfil detallado de personajes
-- Información de stats y equipamiento
-- Selección de personaje principal
-- Consulta rápida desde Discord
-
-### 🏆 Rankings
-- Rankings de personajes
-- Rankings de gremios
-- Rankings PvP
-
-### 🛡️ Gremios y alianzas
-- Información de gremios
-- Miembros y progreso
-- Información de alianzas
-
-### 🛒 Mercado (opcional)
-- Notificaciones de compra/venta en un canal
-- Activación automática si el servidor lo soporta
-
-### 🎁 Extras
-- Sistema de códigos de regalo
-- Sistema de votos con recompensas
-- Auditoría básica
-
----
-
-## 🧩 Arquitectura 🧩
-
-### 🔹 Core
-- Comandos de Discord
-- Interfaz (embeds, modals, botones)
-- Configuración y permisos
-- Base de datos interna del bot
-- Logs y auditoría
-
-👉 **No depende del esquema del servidor**
-
-### 🔹 Providers
-Módulos que conectan el bot con la base de datos real del juego.
-
-- `standard` → esquema base gratuito de referencia
-- `custom` → plantilla para adaptar otros servidores
-- `disabled` → modo solo consulta
-
----
-
-## ⚙️ Instalación rápida
-
-1. Clona el repositorio
-2. Crea tu **Discord Application**
-3. Configura el archivo `.env`
-4. Arranca el bot
-5. Ejecuta `/setup install`
-
-👉 Cada servidor repite este proceso de forma independiente.
-
----
-
-## 👤 Autor 👤
-
-**Shine**  
-Antiguo administrador / desarrollador de servidores **Inquisition**
-
----
-
-## 📜 Licencia 📜
-
-Este proyecto es **open-source**  
-Licencia: **Apache 2.0**
-
----
-
-✨ *Que el Grimorio te guíe.* ✨
+Este proyecto se distribuye bajo la licencia GPL-3.0.
