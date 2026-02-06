@@ -248,138 +248,54 @@ async function loadRankingEntries(worldPool, type, limit, filter) {
     return rows ?? [];
 }
 
-async function loadDiscordLinks(authPool, characterIds) {
-    if (!authPool || characterIds.length === 0) {
-        return new Map();
-    }
-
-    const [rows] = await authPool.query(
-        `
-        SELECT discord_user_id, character_id, is_main
-        FROM dg_discord_character
-        WHERE character_id IN (?)
-        ORDER BY is_main DESC, linked_at ASC;
-        `,
-        [characterIds]
-    );
-
-    const map = new Map();
-    rows?.forEach((row) => {
-        if (!map.has(row.character_id)) {
-            map.set(row.character_id, row.discord_user_id);
-        }
-    });
-
-    return map;
-}
-
-function padColumn(value, width) {
-    return String(value ?? '').padEnd(width, ' ');
-}
-
-function buildRankingLines(type, entries, discordLinks) {
-    const rows = entries.map((entry, index) => {
+function buildRankingLines(type, entries) {
+    return entries.map((entry, index) => {
         const position = formatPosition(index + 1);
+        const spacing = `${position}  `;
 
         if (type === RANKING_TYPES.GUILDS) {
             const level = Number(entry.Level ?? 0);
-            return {
-                position,
-                player: `🏰 ${entry.Name || '—'}`,
-                stat: `✨ Nivel ${formatNumber(level)}`,
-                extra: '—',
-            };
+            const name = entry.Name || '—';
+            return `${spacing}${name} — Nivel ${formatNumber(level)}`;
         }
 
-        const discordUserId = discordLinks.get(entry.Id);
-        const mention = discordUserId ? `<@${discordUserId}>` : 'Sin vincular';
-        const player = `👤 ${mention} ${entry.Name || '—'}`;
+        const name = entry.Name || '—';
         const breedName = entry.BreedName?.trim() || 'Clase desconocida';
 
         if (type === RANKING_TYPES.PVP) {
             const alignmentLevel = Number(entry.AlignmentLevel ?? 0);
-            return {
-                position,
-                player,
-                stat: `⚔️ Honor ${formatNumber(entry.Honor)}`,
-                extra: `🎖️ Alin. ${formatNumber(alignmentLevel)} · ${breedName}`,
-            };
+            return `${spacing}${name} — Honor ${formatNumber(entry.Honor)} · Alin. ${formatNumber(alignmentLevel)} · ${breedName}`;
         }
 
         if (type === RANKING_TYPES.ACHIEVEMENTS) {
-            return {
-                position,
-                player,
-                stat: `🏅 Logros ${formatNumber(entry.AchievementPoints)}`,
-                extra: `${breedName}`,
-            };
+            return `${spacing}${name} — Logros ${formatNumber(entry.AchievementPoints)} · ${breedName}`;
         }
 
         const level = Number(entry.Level ?? 0);
-        return {
-            position,
-            player,
-            stat: `Nivel ${formatNumber(level)}`,
-            extra: `${breedName}`,
-        };
+
+        return `${spacing}${name} — Lvl ${formatNumber(level)} · ${breedName}`;
     });
-
-    if (rows.length === 0) {
-        return [];
-    }
-
-    const playerWidth = Math.max(...rows.map((row) => row.player.length));
-    const statWidth = Math.max(...rows.map((row) => row.stat.length));
-    const extraWidth = Math.max(...rows.map((row) => row.extra.length));
-
-    const headerLabels = {
-        player: type === RANKING_TYPES.GUILDS ? '🏰 Gremio' : '👥 Usuario',
-        stat: '📊 Estadística',
-        extra: '🧩 Detalle',
-    };
-
-    const header = [
-        padColumn(headerLabels.player, playerWidth),
-        padColumn(headerLabels.stat, statWidth),
-        padColumn(headerLabels.extra, extraWidth),
-    ].join('  ');
-
-    const separator = [
-        padColumn('—'.repeat(playerWidth), playerWidth),
-        padColumn('—'.repeat(statWidth), statWidth),
-        padColumn('—'.repeat(extraWidth), extraWidth),
-    ].join('  ');
-
-    const lines = rows.map((row) => {
-        return [
-            row.position,
-            padColumn(row.player, playerWidth),
-            padColumn(row.stat, statWidth),
-            padColumn(row.extra, extraWidth),
-        ].join('  ');
-    });
-
-    return [header, separator, ...lines];
 }
 
 function resolveFilterLabel(state, breeds) {
     if (state.type === RANKING_TYPES.GUILDS) {
-        return 'Global (gremios)';
+        return { scopeLabel: 'Global', classLabel: null };
     }
 
     if (state.filter === 'global') {
-        return 'Global (todas las clases)';
+        return { scopeLabel: 'Global', classLabel: 'Todas las clases' };
     }
 
     const parsed = parseFilterValue(state.filter);
     if (parsed.breedId) {
         const breed = breeds.find((entry) => entry.Id === parsed.breedId);
         if (breed?.ShortName) {
-            return `Clase: ${breed.ShortName}`;
+            const labelClass = `Clase: ${breed.ShortName.trim()}`;
+            return { scopeLabel: 'Global', classLabel: labelClass };
         }
     }
 
-    return 'Global (todas las clases)';
+    return { scopeLabel: 'Global', classLabel: breed.ShortName };
 }
 
 async function buildRankingPayload(ctx, state) {
@@ -390,15 +306,10 @@ async function buildRankingPayload(ctx, state) {
         };
     }
 
-    const authPool = await ctx.db.getPool('auth');
     const breeds = await loadBreeds(worldPool);
     const filter = parseFilterValue(state.filter);
     const entries = await loadRankingEntries(worldPool, state.type, state.limit, filter);
-    const characterIds = state.type === RANKING_TYPES.GUILDS
-        ? []
-        : entries.map((entry) => entry.Id).filter(Boolean);
-    const discordLinks = await loadDiscordLinks(authPool, characterIds);
-    const lines = buildRankingLines(state.type, entries, discordLinks);
+    const lines = buildRankingLines(state.type, entries);
     const filterLabel = resolveFilterLabel(state, breeds);
 
     const embed = buildRankingEmbed({

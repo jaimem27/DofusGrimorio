@@ -9,21 +9,20 @@ const RANKING_LABELS = {
 
 function buildRankingEmbed({ type, limit, filterLabel, lines }) {
     const titleSuffix = RANKING_LABELS[type] || 'Ranking';
-    const body = lines.length
-        ? ['```', lines.join('\n\n'), '```'].join('\n')
-        : 'Sin registros disponibles.';
+    const body = lines.length ? lines.join('\n') : 'Sin registros disponibles.';
+    const classLabel = filterLabel.classLabel ? ` · 🎭 ${filterLabel.classLabel}` : '';
 
     const description = [
-        `🏆 **Top ${limit}** · 🔎 **${filterLabel}**`,
+        `🏆 **Top ${limit}** · 🌍 **${filterLabel.scopeLabel}**${classLabel}`,
         '━━━━━━━━━━━━━━━━━━━━━━━━━━',
         body,
     ].join('\n');
 
     return new EmbedBuilder()
-        .setTitle(`📊 Ranking por ${titleSuffix}`)
+        .setTitle(`📊 Ranking · ${titleSuffix}`)
         .setDescription(description)
         .setColor(0x2f3136)
-        .setFooter({ text: '✨ Ranking · Dofus Grimorio' });
+        .setFooter({ text: '⌁ Datos desde BD · Actualiza al momento ⌁' });
 }
 
 module.exports = { buildRankingEmbed, RANKING_LABELS };
