@@ -50,9 +50,8 @@ a jugadores y staff de forma automática.
    - El script instalará las dependencias necesarias
    - Los comandos de Discord se registrarán automáticamente
 4. Inicia el bot:
-   ```Ejecuta start.cmd
+   - Ejecuta start.cmd que se encuentra en la carpeta raiz
 
-   ```
 
 Si prefieres un acceso directo en Windows, puedes usar `setup.bat` para iniciar el proyecto después de configurar el `.env`.
 
