@@ -31,7 +31,7 @@ async function buildGuildPayload({ guild, level, members, leaderName, taxCollect
         { name: 'Nivel', value: level ? `**${level}**` : '—', inline: true },
         { name: 'Experiencia', value: `**${formatNumber(guild.Experience)}**`, inline: true },
         { name: 'Miembros', value: `**${formatNumber(members)}**`, inline: true },
-        { name: '-----------------------------------------', value: '\u200B', inline: false },
+        { name: '-----------------------------------------------------------------------------', value: '\u200B', inline: false },
         { name: 'Líder', value: leaderName ?? '—', inline: true },
         { name: 'Boost', value: formatNumber(guild.Boost), inline: true },
         { name: 'Prospección', value: formatNumber(guild.Prospecting), inline: true },

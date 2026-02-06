@@ -4,12 +4,9 @@ const IDS = {
     BTN_AUTH: 'dg:install:auth',
     BTN_WORLD: 'dg:install:world',
     BTN_FINISH: 'dg:install:finish',
+    BTN_AUCTION: 'dg:install:auction',
     BTN_RESET: 'dg:install:reset',
 };
-
-function statusLine(ok, label) {
-    return `${label} · ${ok ? '🟢 Configurado' : '🟡 Pendiente'}`;
-}
 
 function row(label, icon, text) {
     const col1 = label.padEnd(11, ' '); // ancho fijo (ajústalo si quieres)
@@ -38,6 +35,13 @@ function buildInstallEmbed(state) {
             'Instalación',
             state.installed ? '🟢' : '🟡',
             state.installed ? 'Completada' : 'En proceso'
+        ),
+        row(
+            'Subastas',
+            state.auctionSupported ? (state.auctionConfigured ? '🟢' : '🟡') : '🔴',
+            state.auctionSupported
+                ? (state.auctionConfigured ? 'Canal configurado' : 'Pendiente')
+                : 'No disponible'
         ),
     ];
 
@@ -81,6 +85,12 @@ function buildInstallButtons(state) {
             .setEmoji('✅')
             .setStyle(ButtonStyle.Success)
             .setDisabled(!(state.authConfigured && state.worldConfigured)),
+        new ButtonBuilder()
+            .setCustomId(IDS.BTN_AUCTION)
+            .setLabel('Configurar subasta')
+            .setEmoji('🏷️')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(!(state.installed && state.auctionSupported)),
         new ButtonBuilder()
             .setCustomId(IDS.BTN_RESET)
             .setLabel('Reiniciar instalación')

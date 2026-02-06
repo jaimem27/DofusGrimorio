@@ -9,6 +9,7 @@ const mysql2 = require('mysql2/promise');
 const MODALS = {
     AUTH: 'dg:modal:auth',
     WORLD: 'dg:modal:world',
+    AUCTION: 'dg:modal:auction',
 }
 
 function isAdmin(interaction) {
@@ -27,17 +28,24 @@ async function loadInstallState(db) {
         ...AUTH_KEYS,
         ...WORLD_KEYS,
         'install.done',
+        'auction.channel_id',
     ]);
 
     const authConfigured = AUTH_REQUIRED_KEYS.every(k => (cfg[k] ?? '').toString().length > 0);
     const worldConfigured = WORLD_REQUIRED_KEYS.every(k => (cfg[k] ?? '').toString().length > 0);
     const installed = (cfg['install.done'] ?? '0') === '1';
+    const auctionConfigured = Boolean((cfg['auction.channel_id'] ?? '').toString().trim());
+    const auctionSupported = installed && worldConfigured
+        ? await checkBidhouseSupport(db)
+        : false;
 
     return {
         authConfigured,
         worldConfigured,
         installed,
         tablesReady: db.isPersistent ? db.isPersistent() : true,
+        auctionConfigured,
+        auctionSupported,
     };
 }
 
@@ -95,6 +103,32 @@ function makeDbModal(kind, defaults = {}) {
         );
 
     return modal;
+}
+
+function makeAuctionModal(defaultChannelId = '') {
+    const channelInput = new TextInputBuilder()
+        .setCustomId('dg:auction:channel')
+        .setLabel('ID del canal para subastas')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setValue(defaultChannelId || '');
+
+    return new ModalBuilder()
+        .setCustomId(MODALS.AUCTION)
+        .setTitle('Configurar subasta')
+        .addComponents(new ActionRowBuilder().addComponents(channelInput));
+}
+
+async function checkBidhouseSupport(db) {
+    const worldPool = await db.getPool('world');
+    if (!worldPool) return false;
+
+    try {
+        const [rows] = await worldPool.query("SHOW TABLES LIKE 'bidhouse_items'");
+        return Array.isArray(rows) && rows.length > 0;
+    } catch (_) {
+        return false;
+    }
 }
 
 async function getDbDefaults(db, kind) {
@@ -187,11 +221,35 @@ async function handleInstallButton(interaction, ctx) {
     if (id === IDS.BTN_RESET) {
         await db.config.delPrefix('auth.');
         await db.config.delPrefix('world.');
+        await db.config.delPrefix('auction.');
         await db.config.set('install.done', '0');
         clearBootstrapConfig();
 
         await interaction.deferUpdate();
         return refreshPanel(interaction, ctx);
+    }
+
+    if (id === IDS.BTN_AUCTION) {
+        const cfg = await db.config.getMany(['install.done', 'auction.channel_id']);
+        if ((cfg['install.done'] ?? '0') !== '1') {
+            return interaction.reply({
+                content: 'Completa la instalación antes de configurar subastas.',
+                ephemeral: true,
+            });
+        }
+
+        const supported = await checkBidhouseSupport(db);
+        if (!supported) {
+            await db.config.set('auction.enabled', '0');
+            await db.config.set('auction.supported', '0');
+            return interaction.reply({
+                content: 'Tu servidor no soporta subastas (tabla `bidhouse_items` no existe).',
+                ephemeral: true,
+            });
+        }
+
+        const modal = makeAuctionModal(cfg['auction.channel_id'] || '');
+        return interaction.showModal(modal);
     }
 
     if (id === IDS.BTN_FINISH) {
@@ -287,6 +345,61 @@ async function handleInstallModal(interaction, ctx) {
     const { db } = ctx;
 
     const isAuth = interaction.customId === MODALS.AUTH;
+    const isAuction = interaction.customId === MODALS.AUCTION;
+
+    if (isAuction) {
+        const channelId = interaction.fields.getTextInputValue('dg:auction:channel').trim();
+        if (!/^\d{5,}$/.test(channelId)) {
+            return interaction.reply({ content: 'ID de canal inválido.', ephemeral: true });
+        }
+
+        const supported = await checkBidhouseSupport(db);
+        if (!supported) {
+            await db.config.set('auction.enabled', '0');
+            await db.config.set('auction.supported', '0');
+            return interaction.reply({
+                content: 'Tu servidor no soporta subastas (tabla `bidhouse_items` no existe).',
+                ephemeral: true,
+            });
+        }
+
+        const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+        if (!channel || !channel.isTextBased?.()) {
+            return interaction.reply({ content: 'No se encontró un canal de texto con ese ID.', ephemeral: true });
+        }
+
+        const worldPool = await db.getPool('world');
+        let lastId = '0';
+        if (worldPool) {
+            try {
+                const [rows] = await worldPool.query('SELECT MAX(Id) AS maxId FROM bidhouse_items');
+                const maxId = rows?.[0]?.maxId ?? rows?.[0]?.MAXID ?? rows?.[0]?.['MAX(Id)'];
+                if (Number.isFinite(Number(maxId))) lastId = String(Number(maxId));
+            } catch (_) {
+                lastId = '0';
+            }
+        }
+
+        await db.config.setMany({
+            'auction.channel_id': channelId,
+            'auction.enabled': '1',
+            'auction.supported': '1',
+            'auction.last_id': lastId,
+        });
+
+        await interaction.reply({
+            content: 'Canal de subastas configurado.',
+            ephemeral: true,
+        });
+
+        try {
+            await refreshPanel(interaction, ctx);
+        } catch (_) {
+
+        }
+
+        return;
+    }
     const prefix = isAuth ? 'dg:auth:' : 'dg:world:';
     const keyPrefix = isAuth ? 'auth.' : 'world.';
 

@@ -20,6 +20,7 @@ async function main() {
   const ranking = require('./ranking.js');
   const gremio = require('./gremio.js');
   const alianza = require('./alianza.js');
+  const about = require('./about.js');
 
   const commands = [
     instalar.data.toJSON(),
@@ -29,6 +30,7 @@ async function main() {
     ranking.data.toJSON(),
     gremio.data.toJSON(),
     alianza.data.toJSON(),
+    about.data.toJSON(),
   ];
 
   const rest = new REST({ version: '10' }).setToken(token);

@@ -16,7 +16,7 @@ const {
     handleSocialModal,
 } = require('./commands/social/handler.js');
 const { logInfo, logError } = require('./logger/logger.js');
-
+const { startAuctionWatcher } = require('./utils/auctionWatcher.js');
 
 
 const ctx = {
@@ -198,6 +198,11 @@ async function bootstrap() {
                 return alianza.execute(interaction, ctx);
             }
 
+            if (interaction.isChatInputCommand() && interaction.commandName === 'about') {
+                const about = require('./commands/about.js');
+                return about.execute(interaction, ctx);
+            }
+
             if (interaction.isButton() && interaction.customId.startsWith('social:')) {
                 return handleSocialButton(interaction, ctx);
             }
@@ -294,6 +299,8 @@ async function bootstrap() {
         setInterval(() => {
             updatePresence(ctx.db);
         }, Number(process.env.PRESENCE_REFRESH_MS || 60000));
+
+        startAuctionWatcher(client, ctx.db);
     });
 
     // Login discord
