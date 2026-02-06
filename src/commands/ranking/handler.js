@@ -19,7 +19,7 @@ const RANKING_TYPES = {
     ACHIEVEMENTS: 'achievements',
 };
 
-const LIMITS = [10, 25];
+const LIMITS = [15, 25];
 
 function formatNumber(value) {
     return new Intl.NumberFormat('es-ES').format(value ?? 0);
@@ -98,16 +98,15 @@ function buildTypeButtons(state) {
 function buildLimitButtons(state) {
     const row = new ActionRowBuilder();
 
-    LIMITS.forEach((limit) => {
-        const isActive = limit === state.limit;
-        row.addComponents(
-            new ButtonBuilder()
-                .setCustomId(`${IDS.LIMIT}:${limit}:${state.type}:${state.filter}`)
-                .setLabel(`Top ${limit}`)
-                .setStyle(isActive ? ButtonStyle.Primary : ButtonStyle.Secondary)
-                .setDisabled(isActive)
-        );
-    });
+    const [first, second] = LIMITS;
+    const nextLimit = state.limit === first ? second : first;
+
+    row.addComponents(
+        new ButtonBuilder()
+            .setCustomId(`${IDS.LIMIT}:${nextLimit}:${state.type}:${state.filter}`)
+            .setLabel(`🔁 Top ${nextLimit}`)
+            .setStyle(ButtonStyle.Primary)
+    );
 
     return row;
 }
@@ -181,6 +180,13 @@ async function loadRankingEntries(worldPool, type, limit, filter) {
                 c.Name,
                 c.Breed,
                 c.Honor,
+                (
+                    SELECT e.Level
+                    FROM experiences e
+                    WHERE e.AlignmentHonor <= c.Honor
+                    ORDER BY e.Level DESC
+                    LIMIT 1
+                ) AS AlignmentLevel,
                 b.ShortName AS BreedName
             FROM characters c
             LEFT JOIN breeds b ON b.Id = c.Breed
@@ -242,28 +248,118 @@ async function loadRankingEntries(worldPool, type, limit, filter) {
     return rows ?? [];
 }
 
-function buildRankingLines(type, entries) {
-    return entries.map((entry, index) => {
+async function loadDiscordLinks(authPool, characterIds) {
+    if (!authPool || characterIds.length === 0) {
+        return new Map();
+    }
+
+    const [rows] = await authPool.query(
+        `
+        SELECT discord_user_id, character_id, is_main
+        FROM dg_discord_character
+        WHERE character_id IN (?)
+        ORDER BY is_main DESC, linked_at ASC;
+        `,
+        [characterIds]
+    );
+
+    const map = new Map();
+    rows?.forEach((row) => {
+        if (!map.has(row.character_id)) {
+            map.set(row.character_id, row.discord_user_id);
+        }
+    });
+
+    return map;
+}
+
+function padColumn(value, width) {
+    return String(value ?? '').padEnd(width, ' ');
+}
+
+function buildRankingLines(type, entries, discordLinks) {
+    const rows = entries.map((entry, index) => {
         const position = formatPosition(index + 1);
+
         if (type === RANKING_TYPES.GUILDS) {
             const level = Number(entry.Level ?? 0);
-            return `${position} ${entry.Name || '—'} — Nivel ${formatNumber(level)}`;
+            return {
+                position,
+                player: `🏰 ${entry.Name || '—'}`,
+                stat: `✨ Nivel ${formatNumber(level)}`,
+                extra: '—',
+            };
         }
 
-        const breedName = entry.BreedName?.trim();
-        const suffix = breedName ? ` · ${breedName}` : '';
+        const discordUserId = discordLinks.get(entry.Id);
+        const mention = discordUserId ? `<@${discordUserId}>` : 'Sin vincular';
+        const player = `👤 ${mention} ${entry.Name || '—'}`;
+        const breedName = entry.BreedName?.trim() || 'Clase desconocida';
 
         if (type === RANKING_TYPES.PVP) {
-            return `${position} ${entry.Name || '—'} — Honor ${formatNumber(entry.Honor)}${suffix}`;
+            const alignmentLevel = Number(entry.AlignmentLevel ?? 0);
+            return {
+                position,
+                player,
+                stat: `⚔️ Honor ${formatNumber(entry.Honor)}`,
+                extra: `🎖️ Alin. ${formatNumber(alignmentLevel)} · ${breedName}`,
+            };
         }
 
         if (type === RANKING_TYPES.ACHIEVEMENTS) {
-            return `${position} ${entry.Name || '—'} — Logros ${formatNumber(entry.AchievementPoints)}${suffix}`;
+            return {
+                position,
+                player,
+                stat: `🏅 Logros ${formatNumber(entry.AchievementPoints)}`,
+                extra: `${breedName}`,
+            };
         }
 
         const level = Number(entry.Level ?? 0);
-        return `${position} ${entry.Name || '—'} — Nivel ${formatNumber(level)}${suffix}`;
+        return {
+            position,
+            player,
+            stat: `Nivel ${formatNumber(level)}`,
+            extra: `${breedName}`,
+        };
     });
+
+    if (rows.length === 0) {
+        return [];
+    }
+
+    const playerWidth = Math.max(...rows.map((row) => row.player.length));
+    const statWidth = Math.max(...rows.map((row) => row.stat.length));
+    const extraWidth = Math.max(...rows.map((row) => row.extra.length));
+
+    const headerLabels = {
+        player: type === RANKING_TYPES.GUILDS ? '🏰 Gremio' : '👥 Usuario',
+        stat: '📊 Estadística',
+        extra: '🧩 Detalle',
+    };
+
+    const header = [
+        padColumn(headerLabels.player, playerWidth),
+        padColumn(headerLabels.stat, statWidth),
+        padColumn(headerLabels.extra, extraWidth),
+    ].join('  ');
+
+    const separator = [
+        padColumn('—'.repeat(playerWidth), playerWidth),
+        padColumn('—'.repeat(statWidth), statWidth),
+        padColumn('—'.repeat(extraWidth), extraWidth),
+    ].join('  ');
+
+    const lines = rows.map((row) => {
+        return [
+            row.position,
+            padColumn(row.player, playerWidth),
+            padColumn(row.stat, statWidth),
+            padColumn(row.extra, extraWidth),
+        ].join('  ');
+    });
+
+    return [header, separator, ...lines];
 }
 
 function resolveFilterLabel(state, breeds) {
@@ -294,10 +390,15 @@ async function buildRankingPayload(ctx, state) {
         };
     }
 
+    const authPool = await ctx.db.getPool('auth');
     const breeds = await loadBreeds(worldPool);
     const filter = parseFilterValue(state.filter);
     const entries = await loadRankingEntries(worldPool, state.type, state.limit, filter);
-    const lines = buildRankingLines(state.type, entries);
+    const characterIds = state.type === RANKING_TYPES.GUILDS
+        ? []
+        : entries.map((entry) => entry.Id).filter(Boolean);
+    const discordLinks = await loadDiscordLinks(authPool, characterIds);
+    const lines = buildRankingLines(state.type, entries, discordLinks);
     const filterLabel = resolveFilterLabel(state, breeds);
 
     const embed = buildRankingEmbed({
