@@ -1,19 +1,4 @@
-const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const { buildEmblemBuffer } = require('../../utils/emblemGenerator.js');
-
-function formatNumber(value) {
-    return new Intl.NumberFormat('es-ES').format(Number(value) || 0);
-}
-
-function formatDate(value) {
-    if (!value) return '—';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '—';
-    return date.toLocaleString('es-ES', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    });
-}
+const { buildGuildPayload: buildGuildUiPayload } = require('./ui.js');
 
 async function fetchGuild(worldPool, name) {
     const [rows] = await worldPool.query(
@@ -23,6 +8,11 @@ async function fetchGuild(worldPool, name) {
             g.Name,
             g.CreationDate,
             g.Experience,
+            g.Boost,
+            g.Prospecting,
+            g.Wisdom,
+            g.Pods,
+            g.MaxTaxCollectors,
             g.EmblemBackgroundShape,
             g.EmblemBackgroundColor,
             g.EmblemForegroundShape,
@@ -63,49 +53,45 @@ async function fetchGuildMemberCount(worldPool, guildId) {
     return rows?.[0]?.total ?? rows?.[0]?.['COUNT(*)'] ?? 0;
 }
 
+async function fetchGuildLeader(worldPool, guildId) {
+    const [rows] = await worldPool.query(
+        `
+        SELECT c.Name
+        FROM guild_members gm
+        INNER JOIN characters c ON c.Id = gm.CharacterId AND c.DeletedDate IS NULL
+        WHERE gm.GuildId = ?
+          AND gm.RankId = 1
+        LIMIT 1;
+        `,
+        [guildId]
+    );
+    return rows?.[0]?.Name ?? null;
+}
+
+async function fetchGuildTaxCollectors(worldPool, guildId) {
+    const [rows] = await worldPool.query(
+        'SELECT COUNT(*) AS total FROM world_maps_taxcollector WHERE GuildId = ?;',
+        [guildId]
+    );
+    return rows?.[0]?.total ?? rows?.[0]?.['COUNT(*)'] ?? 0;
+}
+
 async function buildGuildPayload(worldPool, guild) {
-    const [level, members] = await Promise.all([
+    const [level, members, leaderName, taxCollectorsCount] = await Promise.all([
         fetchGuildLevel(worldPool, guild.Experience),
         fetchGuildMemberCount(worldPool, guild.Id),
+        fetchGuildLeader(worldPool, guild.Id),
+        fetchGuildTaxCollectors(worldPool, guild.Id),
     ]);
 
-    const embed = new EmbedBuilder()
-        .setTitle(`🏰 Gremio: ${guild.Name}`)
-        .setColor(0x2f3136)
-        .addFields(
-            { name: 'Nivel', value: level ? String(level) : '—', inline: true },
-            { name: 'Experiencia', value: formatNumber(guild.Experience), inline: true },
-            { name: 'Miembros', value: formatNumber(members), inline: true },
-            { name: 'Creado', value: formatDate(guild.CreationDate), inline: true }
-        );
+    return buildGuildUiPayload({
+        guild,
+        level,
+        members,
+        leaderName,
+        taxCollectorsCount,
 
-    if (guild.AllianceId) {
-        const allianceLabel = guild.AllianceName
-            ? `${guild.AllianceName}${guild.AllianceTag ? ` [${guild.AllianceTag}]` : ''}`
-            : `#${guild.AllianceId}`;
-        embed.addFields({ name: 'Alianza', value: allianceLabel, inline: true });
-    }
-
-    if (guild.MotdContent) {
-        embed.setDescription(`**Mensaje del día**\n${guild.MotdContent}`);
-    }
-
-    const emblemBuffer = await buildEmblemBuffer({
-        backgroundFolder: 'back',
-        backgroundShape: guild.EmblemBackgroundShape,
-        backgroundColor: guild.EmblemBackgroundColor,
-        foregroundShape: guild.EmblemForegroundShape,
-        foregroundColor: guild.EmblemForegroundColor,
     });
-
-    if (!emblemBuffer) {
-        return { embed, files: [] };
-    }
-
-    const attachment = new AttachmentBuilder(emblemBuffer, { name: 'emblem.png' });
-    embed.setThumbnail('attachment://emblem.png');
-
-    return { embed, files: [attachment] };
 }
 
 async function handleGuildCommand(interaction, ctx) {
