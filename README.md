@@ -42,7 +42,7 @@ a jugadores y staff de forma automática.
 
    ```
 2. Configura el entorno:
-   ```Abre el .env.example -> rellenamos valores y lo guardamos como .env
+   Abre el .env.example -> rellenamos valores y lo guardamos como .env
 
    ```
 3. Ejecutar el instaldor:
