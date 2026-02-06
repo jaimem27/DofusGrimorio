@@ -42,9 +42,9 @@ a jugadores y staff de forma automática.
 
    ```
 2. Configura el entorno:
-   Abre el .env.example -> rellenamos valores y lo guardamos como .env
-
-   ```
+   - Abre el .env.example
+   - Rellenamos valores que nos pidan
+   - Lo guardamos como .env
 3. Ejecutar el instaldor:
    - En Windows, haz doble clic en setup.bat
    - El script instalará las dependencias necesarias
