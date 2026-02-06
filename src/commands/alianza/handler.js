@@ -30,10 +30,21 @@ async function fetchAllianceGuildCount(worldPool, allianceId) {
     return rows?.[0]?.total ?? rows?.[0]?.['COUNT(*)'] ?? 0;
 }
 
-async function buildAlliancePayload(worldPool, alliance) {
-    const guildsCount = await fetchAllianceGuildCount(worldPool, alliance.Id);
+async function fetchAllianceTerritoriesCount(worldPool, allianceId) {
+    const [rows] = await worldPool.query(
+        'SELECT COUNT(*) AS total FROM world_maps_prism WHERE AllianceId = ? AND IsDefated = 0;',
+        [allianceId]
+    );
+    return rows?.[0]?.total ?? rows?.[0]?.['COUNT(*)'] ?? 0;
+}
 
-    return buildAllianceUiPayload({ alliance, guildsCount });
+async function buildAlliancePayload(worldPool, alliance) {
+    const [guildsCount, territoriesCount] = await Promise.all([
+        fetchAllianceGuildCount(worldPool, alliance.Id),
+        fetchAllianceTerritoriesCount(worldPool, alliance.Id),
+    ]);
+
+    return buildAllianceUiPayload({ alliance, guildsCount, territoriesCount });
 }
 
 async function handleAllianceCommand(interaction, ctx) {

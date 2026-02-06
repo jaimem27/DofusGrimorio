@@ -15,13 +15,17 @@ function formatDate(value) {
     });
 }
 
-async function buildAlliancePayload({ alliance, guildsCount }) {
+async function buildAlliancePayload({ alliance, guildsCount, territoriesCount }) {
+    const accentColor = Number(alliance.EmblemForegroundColor);
+    const embedColor = Number.isFinite(accentColor) ? accentColor : 0x2f3136;
+
     const embed = new EmbedBuilder()
         .setTitle(`🤝 Alianza: ${alliance.Name}`)
-        .setColor(0x2f3136)
+        .setColor(embedColor)
         .addFields(
             { name: 'Etiqueta', value: alliance.Tag ? `${alliance.Tag}` : '—', inline: true },
             { name: 'Gremios', value: formatNumber(guildsCount), inline: true },
+            { name: 'Territorios', value: formatNumber(territoriesCount), inline: true },
             { name: 'Creada', value: formatDate(alliance.CreationDate), inline: true }
         );
 
