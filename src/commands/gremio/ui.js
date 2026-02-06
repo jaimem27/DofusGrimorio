@@ -49,7 +49,8 @@ async function buildGuildPayload({ guild, level, members, leaderName, taxCollect
     }
 
     fields.push({
-        value: `**Creado**\n${formatDate(guild.CreationDate)}`,
+        name: 'Creado',
+        value: formatDate(guild.CreationDate),
         inline: false,
     });
 
